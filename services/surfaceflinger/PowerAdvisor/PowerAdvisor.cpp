@@ -14,6 +14,12 @@
  * limitations under the License.
  */
 
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
 // #define LOG_NDEBUG 0
 
 #define ATRACE_TAG ATRACE_TAG_GRAPHICS
@@ -71,7 +77,8 @@ PowerAdvisor::PowerAdvisor(std::function<void()>&& sfDisableExpensiveFn,
       : mPowerHal(std::make_unique<power::PowerHalController>()) {
     if (timeout > 0ms) {
         mScreenUpdateTimer.emplace("UpdateImminentTimer", timeout,
-                                   /* resetCallback */ nullptr,
+                                   /* resetCallback */ /* QTI_BEGIN */
+                                   [this] { mSendUpdateImminent.store(false); } /* QTI_END */,
                                    /* timeoutCallback */
                                    [this, disableExpensiveFn = std::move(sfDisableExpensiveFn),
                                     timeout] {

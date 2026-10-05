@@ -33,6 +33,10 @@ namespace android {
 class Rect;
 class String8;
 class HWComposer;
+namespace surfaceflingerextension {
+class QtiDisplaySurfaceExtensionIntf;
+class QtiFramebufferSurfaceExtension;
+} // namespace surfaceflingerextension
 
 // ---------------------------------------------------------------------------
 
@@ -50,6 +54,9 @@ public:
 
     void onFirstRef() override;
 
+    virtual surfaceflingerextension::QtiDisplaySurfaceExtensionIntf* qtiGetDisplaySurfaceExtn() {
+        return mQtiDSExtnIntf;
+    }
 private:
     friend class FramebufferSurfaceTest;
     friend class sp<LegacyFramebufferSurface>;
@@ -109,6 +116,8 @@ private:
     bool mHasPendingRelease;
     int mPreviousBufferSlot;
     sp<GraphicBuffer> mPreviousBuffer;
+    friend class android::surfaceflingerextension::QtiFramebufferSurfaceExtension;
+    android::surfaceflingerextension::QtiDisplaySurfaceExtensionIntf* mQtiDSExtnIntf = nullptr;
 };
 
 // ---------------------------------------------------------------------------

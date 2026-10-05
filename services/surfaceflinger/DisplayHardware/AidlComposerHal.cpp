@@ -33,6 +33,13 @@
 #include <aidl/android/hardware/graphics/composer3/BnComposerCallback.h>
 #include <aidl/android/hardware/graphics/composer3/VsyncSample.h>
 
+// QTI_BEGIN: 2023-02-26: Display: AidlComposerHal: Add support for QtiComposer3Client
+#ifdef QTI_COMPOSER3_EXTENSIONS
+#include <aidl/vendor/qti/hardware/display/composer3/IQtiComposer3Client.h>
+#include "../QtiExtension/QtiAidlComposerHalExtension.h"
+#endif
+
+// QTI_END: 2023-02-26: Display: AidlComposerHal: Add support for QtiComposer3Client
 #include <algorithm>
 #include <cinttypes>
 #include <string>
@@ -299,6 +306,23 @@ AidlComposer::AidlComposer(std::shared_ptr<AidlIComposer> composer)
     mLifecycleBatchCommandSupported = getLayerLifecycleBatchCommand();
 
     ALOGI("Loaded AIDL composer3 HAL service");
+// QTI_BEGIN: 2023-02-26: Display: AidlComposerHal: Add support for QtiComposer3Client
+#ifdef QTI_COMPOSER3_EXTENSIONS
+    ndk::SpAIBinder qtiComposer3ClientBinder;
+// QTI_END: 2023-02-26: Display: AidlComposerHal: Add support for QtiComposer3Client
+    AIBinder_getExtension(mAidlComposer->asBinder().get(),
+// QTI_BEGIN: 2023-02-26: Display: AidlComposerHal: Add support for QtiComposer3Client
+                          qtiComposer3ClientBinder.getR());
+    if (qtiComposer3ClientBinder.get() != nullptr) {
+        qtiComposer3Client = IQtiComposer3Client::fromBinder(qtiComposer3ClientBinder);
+    }
+    if (!qtiComposer3Client) {
+        ALOGW("Failed to get QtiComposer3Client service");
+        return;
+    }
+    ALOGI("Loaded QtiComposer3Client HAL service");
+#endif
+// QTI_END: 2023-02-26: Display: AidlComposerHal: Add support for QtiComposer3Client
 }
 
 AidlComposer::~AidlComposer() = default;
@@ -942,6 +966,16 @@ Error AidlComposer::presentOrValidateDisplay(Display display, nsecs_t expectedPr
 
     *state = translate<uint32_t>(*result);
 
+// QTI_BEGIN: 2024-02-28: Display: AidlComposerHal: Add handling for presentOrValidatedisplay state
+    if (*state == 2) {
+        auto fence = reader->get().takePresentFence(displayId);
+        // take ownership
+        *outPresentFence = fence.get();
+        *fence.getR() = -1;
+        reader->get().hasChanges(displayId, outNumTypes, outNumRequests);
+    }
+
+// QTI_END: 2024-02-28: Display: AidlComposerHal: Add handling for presentOrValidatedisplay state
     if (*result == PresentOrValidate::Result::Presented) {
         auto fence = reader->get().takePresentFence(displayId);
         // take ownership
@@ -1199,15 +1233,40 @@ Error AidlComposer::execute(Display display) {
     if (!writer || !reader) {
         return Error::BAD_DISPLAY;
     }
-
     auto commands = writer->get().takePendingCommands();
+// QTI_BEGIN: 2023-02-26: Display: AidlComposerHal: Add support for QtiComposer3Client
+#ifdef QTI_COMPOSER3_EXTENSIONS
+    const auto& qtiCommands = writer->get().getPendingQtiCommands();
+
+// QTI_END: 2023-02-26: Display: AidlComposerHal: Add support for QtiComposer3Client
+// QTI_BEGIN: 2023-03-22: Display: surfaceflinger: Fixes for spec fence
+    if (commands.empty() && qtiCommands.empty()) {
+        writer->get().qtiReset();
+        return Error::NONE;
+    }
+#else
+// QTI_END: 2023-03-22: Display: surfaceflinger: Fixes for spec fence
     if (commands.empty()) {
         return Error::NONE;
     }
+// QTI_BEGIN: 2023-03-22: Display: surfaceflinger: Fixes for spec fence
+#endif
+// QTI_END: 2023-03-22: Display: surfaceflinger: Fixes for spec fence
 
     { // scope for results
         std::vector<composer3::CommandResultPayload> results;
-        auto status = mAidlComposerClient->executeCommands(commands, &results);
+// QTI_BEGIN: 2023-02-26: Display: AidlComposerHal: Add support for QtiComposer3Client
+        ::ndk::ScopedAStatus status;
+#ifdef QTI_COMPOSER3_EXTENSIONS
+        if (qtiComposer3Client) {
+            status = qtiComposer3Client->qtiExecuteCommands(commands, qtiCommands, &results);
+        } else {
+            status = mAidlComposerClient->executeCommands(commands, &results);
+        }
+#else
+        status = mAidlComposerClient->executeCommands(commands, &results);
+#endif
+// QTI_END: 2023-02-26: Display: AidlComposerHal: Add support for QtiComposer3Client
         if (!status.isOk()) {
             ALOGE("executeCommands failed %s", status.getDescription().c_str());
             return static_cast<Error>(status.getServiceSpecificError());
@@ -1221,6 +1280,11 @@ Error AidlComposer::execute(Display display) {
         const auto index = static_cast<size_t>(cmdErr.commandIndex);
         if (cmdErr.commandIndex < 0 || index >= commands.size()) {
             ALOGE("invalid command index %zu", index);
+// QTI_BEGIN: 2026-06-17: Display: AidlComposerHal: Reset QTI writer on error to prevent stale commands
+#ifdef QTI_COMPOSER3_EXTENSIONS
+            writer->get().qtiReset();
+#endif
+// QTI_END: 2026-06-17: Display: AidlComposerHal: Reset QTI writer on error to prevent stale commands
             return Error::BAD_PARAMETER;
         }
 
@@ -1233,6 +1297,12 @@ Error AidlComposer::execute(Display display) {
                   cmdErr.errorCode);
         }
     }
+
+// QTI_BEGIN: 2023-02-26: Display: AidlComposerHal: Add support for QtiComposer3Client
+#ifdef QTI_COMPOSER3_EXTENSIONS
+    writer->get().qtiReset();
+#endif
+// QTI_END: 2023-02-26: Display: AidlComposerHal: Add support for QtiComposer3Client
 
     return error;
 }
@@ -1892,8 +1962,10 @@ Error AidlComposer::getDisplayKnownVsyncSample(Display display,
     return Error::NONE;
 }
 
-ftl::Optional<std::reference_wrapper<ComposerClientWriter>> AidlComposer::getWriter(Display display)
-        REQUIRES_SHARED(mMutex) {
+// QTI_BEGIN: 2023-02-26: Display: AidlComposerHal: Add support for QtiComposer3Client
+ftl::Optional<std::reference_wrapper<QtiAidlCommandWriter>> AidlComposer::getWriter(
+        Display display) REQUIRES_SHARED(mMutex) {
+// QTI_END: 2023-02-26: Display: AidlComposerHal: Add support for QtiComposer3Client
     return mWriters.get(display);
 }
 

@@ -104,6 +104,14 @@ public:
     virtual void resizeBuffers(const ui::Size&) override;
     virtual const sp<Fence>& getClientTargetAcquireFence() const override;
     virtual bool supportsCompositionStrategyPrediction() const override { return false; }
+// QTI_BEGIN: 2023-01-24: Display: sf: Add support for multiple displays
+    virtual android::surfaceflingerextension::QtiDisplaySurfaceExtensionIntf*
+    qtiGetDisplaySurfaceExtn() {
+        // TODO stub method to satisfy interface
+        return nullptr;
+    }
+
+// QTI_END: 2023-01-24: Display: sf: Add support for multiple displays
 
 private:
     class RenderConsumerListener;

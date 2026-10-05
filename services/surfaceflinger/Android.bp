@@ -381,6 +381,7 @@ cc_binary {
     name: "surfaceflinger",
     defaults: [
         "libsurfaceflinger_binary",
+        "libqtisurfaceflingerextension_defaults",
     ],
     init_rc: ["surfaceflinger.rc"],
     srcs: [
@@ -391,6 +392,10 @@ cc_binary {
     ],
     shared_libs: [
         "libSurfaceFlingerProp",
+    ],
+    static_libs: [
+        "libqtisurfaceflingerextension",
+        "libqticompositionengineextension",
     ],
 
     logtags: ["surfaceflinger.logtags"],

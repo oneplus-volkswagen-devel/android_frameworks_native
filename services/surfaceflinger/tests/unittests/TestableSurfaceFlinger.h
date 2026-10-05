@@ -385,9 +385,11 @@ public:
 
     auto acquireVirtualDisplay(ui::Size resolution, ui::PixelFormat format,
                                const std::string& uniqueId,
-                               compositionengine::DisplayCreationArgsBuilder& builder) {
+                               compositionengine::DisplayCreationArgsBuilder& builder,
+                               bool canAllocateHwcForVDS) {
         ftl::FakeGuard guard(mFlinger->mStateLock);
-        return mFlinger->acquireVirtualDisplay(resolution, format, uniqueId, builder);
+        return mFlinger->acquireVirtualDisplay(resolution, format, uniqueId, builder,
+                                              canAllocateHwcForVDS);
     }
 
     auto destroyVirtualDisplay(const sp<IBinder>& displayToken) {

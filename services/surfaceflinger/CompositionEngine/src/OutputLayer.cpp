@@ -14,6 +14,12 @@
  * limitations under the License.
  */
 
+/* Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+// QTI_BEGIN: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+// QTI_END: 2023-03-06: Display: SF: Squash commit of SF Extensions.
 #include <DisplayHardware/Hal.h>
 #include <aidl/android/hardware/graphics/composer3/LutProperties.h>
 #include <android-base/stringprintf.h>
@@ -52,6 +58,11 @@
 
 #include "DisplayHardware/HWComposer.h"
 
+// QTI_BEGIN: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+#include "../QtiExtension/QtiOutputExtension.h"
+using android::compositionengineextension::QtiOutputExtension;
+
+// QTI_END: 2023-03-06: Display: SF: Squash commit of SF Extensions.
 // TODO(b/129481165): remove the #pragma below and fix conversion issues
 #pragma clang diagnostic pop // ignored "-Wconversion"
 
@@ -971,6 +982,13 @@ void OutputLayer::writeOutputIndependentPerFrameStateToHWC(
             // Ignored
             break;
     }
+// QTI_BEGIN: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+
+    QtiOutputExtension::qtiSetLayerType(hwcLayer, outputIndependentState.qtiLayerClass,
+                              getLayerFE().getDebugName());
+// QTI_END: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+
+    qtiWritePrivacyRegionsToHWC(hwcLayer, outputIndependentState);
 }
 
 void OutputLayer::writeSolidColorStateToHWC(HWC2::Layer* hwcLayer,
@@ -1319,6 +1337,71 @@ void OutputLayer::dump(std::string& out) const {
         layerFEState->dump(out);
     }
 }
+
+// QTI_BEGIN
+void OutputLayer::qtiWritePrivacyRegionsToHWC(
+        [[maybe_unused]] HWC2::Layer* hwcLayer,
+        [[maybe_unused]] const LayerFECompositionState& outputIndependentState) {
+#ifdef QTI_PRIVACY_LAYER_SUPPORT
+    if (mQtiDisplayConnectionType != ui::DisplayConnectionType::Internal) {
+        return;
+    }
+
+    // Set the Corner Radius on HWC layer.
+    bool hasRoundedCorner = getLayerFE().hasRoundedCorners();
+    if (hasRoundedCorner) {
+        vec2 cornerRadius = getLayerFE().getCornerRadius();
+        QtiOutputExtension::qtiSetCornerRadius(hwcLayer, cornerRadius.x, cornerRadius.y);
+    }
+
+    // Set Privacy Regions on HWC layer.
+    bool fullPrivacyLayer = outputIndependentState.privacyWholeLayer;
+    size_t numPrivacyRegions = fullPrivacyLayer ? 1 : outputIndependentState.privacyRegions.size();
+    if (numPrivacyRegions != 0) {
+        std::vector<Rect> privacyRects;
+        std::vector<float> privacyRadius;
+        std::vector<uint32_t> privacyIndex;
+        privacyRects.reserve(numPrivacyRegions);
+        privacyRadius.reserve(numPrivacyRegions);
+        privacyIndex.reserve(numPrivacyRegions);
+
+        if (fullPrivacyLayer) {
+            float cornerRadius = 0;
+            const auto& state = getState();
+            Rect displayFrame = state.displayFrame;
+            vec2 radius = hasRoundedCorner ? getLayerFE().getCornerRadius() : vec2(0.0f, 0.0f);
+            cornerRadius = (radius.x <= radius.y) ? radius.x : radius.y;
+            if (state.overrideInfo.buffer != nullptr) {
+                displayFrame = state.overrideInfo.displayFrame;
+            }
+            // Set the full HWC layer as Privacy.
+            privacyRadius.push_back(cornerRadius);
+            privacyRects.push_back(displayFrame);
+            privacyIndex.push_back(1);
+        } else {
+            for (size_t i = 0; i < numPrivacyRegions; i++) {
+                const PrivacyRegion& region = outputIndependentState.privacyRegions.at(i);
+                privacyRadius.push_back(region.cornerRadius);
+                privacyIndex.push_back(region.index);
+                Rect privacyRect = Rect(region.left, region.top, region.right, region.bottom);
+                // Convert from layerStackSpace to displaySpace
+                const auto& outputState = getOutput().getState();
+                const ui::Transform displayTransform{outputState.transform};
+                privacyRect = displayTransform.transform(privacyRect);
+                privacyRects.push_back(privacyRect);
+            }
+        }
+        QtiOutputExtension::qtiSetPrivacyRegions(hwcLayer, privacyRects, privacyRadius,
+                                                 privacyIndex);
+    }
+#endif
+}
+
+void OutputLayer::qtiSetConnectionType(ui::DisplayConnectionType type) {
+    mQtiDisplayConnectionType = type;
+}
+
+// QTI_END
 
 } // namespace impl
 } // namespace android::compositionengine

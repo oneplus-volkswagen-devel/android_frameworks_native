@@ -14,6 +14,18 @@
  * limitations under the License.
  */
 
+// QTI_BEGIN: 2024-02-29: Display: sf: consider smomo vote for content detection
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+// QTI_END: 2024-02-29: Display: sf: consider smomo vote for content detection
+// QTI_BEGIN: 2025-02-12: Display: sf: avoid smomo override when game frame rate override is present
+ * Copyright (c) 2024-2025 Qualcomm Innovation Center, Inc. All rights reserved.
+// QTI_END: 2025-02-12: Display: sf: avoid smomo override when game frame rate override is present
+// QTI_BEGIN: 2024-02-29: Display: sf: consider smomo vote for content detection
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+// QTI_END: 2024-02-29: Display: sf: consider smomo vote for content detection
+
 #define ATRACE_TAG ATRACE_TAG_GRAPHICS
 
 #include "LayerHistory.h"
@@ -186,7 +198,7 @@ auto LayerHistory::summarize(nsecs_t now) -> Summary {
               layerFocused ? "" : "not");
 
         SFTRACE_FORMAT("%s", info->getName().c_str());
-        const auto votes = info->getRefreshRateVote(now);
+        auto votes = info->getRefreshRateVote(now);
         for (LayerInfo::LayerVote vote : votes) {
             if (vote.isNoVote()) {
                 continue;
@@ -200,7 +212,6 @@ auto LayerHistory::summarize(nsecs_t now) -> Summary {
 
             const float layerArea = transformed.getWidth() * transformed.getHeight();
             float weight = mDisplayArea ? layerArea / mDisplayArea : 0.0f;
-
             if (CC_UNLIKELY(SFTRACE_ENABLED())) {
                 const std::string categoryString = vote.category == FrameRateCategory::Default
                         ? ""
@@ -209,7 +220,9 @@ auto LayerHistory::summarize(nsecs_t now) -> Summary {
                 SFTRACE_FORMAT_INSTANT("%s %s %s (%.2f)", ftl::enum_string(vote.type).c_str(),
                                        to_string(vote.fps).c_str(), categoryString.c_str(), weight);
             }
-
+            if (mQtiThermalFps > 0 && (int32_t)vote.fps.getValue() > (int32_t)mQtiThermalFps) {
+                vote.fps = Fps::fromValue(mQtiThermalFps);
+            }
             summary.push_back({
                     .name = info->getName(),
                     .ownerUid = info->getOwnerUid(),
@@ -252,6 +265,10 @@ void LayerHistory::partitionLayers(nsecs_t now) {
         }
     }
 
+// QTI_BEGIN: 2025-02-12: Display: sf: avoid smomo override when game frame rate override is present
+    mQtiGameFrameRateOverridePresent = false;
+
+// QTI_END: 2025-02-12: Display: sf: avoid smomo override when game frame rate override is present
     // Iterate over active map, moving inactive layers to the inactive map.
     for (auto it = mActiveLayerInfos.begin(); it != mActiveLayerInfos.end();) {
         auto& info = it->second.second;
@@ -310,40 +327,63 @@ void LayerHistory::partitionLayers(nsecs_t now) {
                     hasSetFrameRateOpinion || hasCategoryOpinion;
             const bool hasFrameRateOpinionArr = frameRate.isValid() && !frameRate.isNoVote();
 
-            if (gameModeFrameRateOverride.isValid()) {
-                info->setLayerVote({gameFrameRateOverrideVoteType, gameModeFrameRateOverride});
-                SFTRACE_FORMAT_INSTANT("GameModeFrameRateOverride");
-                if (CC_UNLIKELY(mTraceEnabled)) {
-                    trace(*info, gameFrameRateOverrideVoteType,
-                          gameModeFrameRateOverride.getIntValue());
-                }
-            } else if (hasFrameRateOpinionAboveGameDefault &&
-                       frameRate.isVoteValidForMrr(isVrrDisplay)) {
-                info->setLayerVote({setFrameRateVoteType,
-                                    isValuelessVote ? 0_Hz : frameRate.vote.rate,
-                                    frameRate.vote.seamlessness, frameRate.category});
-                if (CC_UNLIKELY(mTraceEnabled)) {
-                    trace(*info, gameFrameRateOverrideVoteType, frameRate.vote.rate.getIntValue());
-                }
-            } else if (gameDefaultFrameRateOverride.isValid()) {
-                info->setLayerVote({gameFrameRateOverrideVoteType, gameDefaultFrameRateOverride});
-                SFTRACE_FORMAT_INSTANT("GameDefaultFrameRateOverride");
-                if (CC_UNLIKELY(mTraceEnabled)) {
-                    trace(*info, gameFrameRateOverrideVoteType,
-                          gameDefaultFrameRateOverride.getIntValue());
-                }
-            } else if (hasFrameRateOpinionArr && frameRate.isVoteValidForMrr(isVrrDisplay)) {
-                // This allows NoPreference votes on ARR devices after considering the
-                // gameDefaultFrameRateOverride (above).
-                info->setLayerVote({setFrameRateVoteType,
-                                    isValuelessVote ? 0_Hz : frameRate.vote.rate,
-                                    frameRate.vote.seamlessness, frameRate.category});
-                if (CC_UNLIKELY(mTraceEnabled)) {
-                    trace(*info, gameFrameRateOverrideVoteType, frameRate.vote.rate.getIntValue());
-                }
-            } else {
-                if (hasFrameRateOpinionArr && !frameRate.isVoteValidForMrr(isVrrDisplay)) {
-                    if (CC_UNLIKELY(SFTRACE_ENABLED())) {
+                if (gameModeFrameRateOverride.isValid()) {
+                    info->setLayerVote({gameFrameRateOverrideVoteType, gameModeFrameRateOverride});
+                    SFTRACE_FORMAT_INSTANT("GameModeFrameRateOverride");
+                    if (CC_UNLIKELY(mTraceEnabled)) {
+                        trace(*info, gameFrameRateOverrideVoteType,
+                              gameModeFrameRateOverride.getIntValue());
+                    }
+// QTI_BEGIN: 2025-02-12: Display: sf: avoid smomo override when game frame rate override is present
+                    mQtiGameFrameRateOverridePresent = true;
+// QTI_END: 2025-02-12: Display: sf: avoid smomo override when game frame rate override is present
+                } else if (hasFrameRateOpinionAboveGameDefault &&
+                           frameRate.isVoteValidForMrr(isVrrDisplay)) {
+                    info->setLayerVote({setFrameRateVoteType,
+                                        isValuelessVote ? 0_Hz : frameRate.vote.rate,
+                                        frameRate.vote.seamlessness, frameRate.category});
+                    if (CC_UNLIKELY(mTraceEnabled)) {
+                        trace(*info, gameFrameRateOverrideVoteType,
+                              frameRate.vote.rate.getIntValue());
+                    }
+// QTI_BEGIN: 2025-02-12: Display: sf: avoid smomo override when game frame rate override is present
+                    mQtiGameFrameRateOverridePresent = true;
+// QTI_END: 2025-02-12: Display: sf: avoid smomo override when game frame rate override is present
+                } else if (gameDefaultFrameRateOverride.isValid()) {
+                    info->setLayerVote(
+                            {gameFrameRateOverrideVoteType, gameDefaultFrameRateOverride});
+                    SFTRACE_FORMAT_INSTANT("GameDefaultFrameRateOverride");
+                    if (CC_UNLIKELY(mTraceEnabled)) {
+                        trace(*info, gameFrameRateOverrideVoteType,
+                              gameDefaultFrameRateOverride.getIntValue());
+                    }
+// QTI_BEGIN: 2025-02-12: Display: sf: avoid smomo override when game frame rate override is present
+                    mQtiGameFrameRateOverridePresent = true;
+// QTI_END: 2025-02-12: Display: sf: avoid smomo override when game frame rate override is present
+                } else if (hasFrameRateOpinionArr && frameRate.isVoteValidForMrr(isVrrDisplay)) {
+                    // This allows NoPreference votes on ARR devices after considering the
+                    // gameDefaultFrameRateOverride (above).
+                    info->setLayerVote({setFrameRateVoteType,
+                                        isValuelessVote ? 0_Hz : frameRate.vote.rate,
+                                        frameRate.vote.seamlessness, frameRate.category});
+                    if (CC_UNLIKELY(mTraceEnabled)) {
+                        trace(*info, gameFrameRateOverrideVoteType,
+                              frameRate.vote.rate.getIntValue());
+                    }
+// QTI_BEGIN: 2025-02-12: Display: sf: avoid smomo override when game frame rate override is present
+                    mQtiGameFrameRateOverridePresent = true;
+                } else if (refresh_rate_votes_.find(it->first) != refresh_rate_votes_.end() &&
+                           refresh_rate_votes_[it->first] != -1) {
+                    info->setLayerVote({LayerVoteType::ExplicitExact,
+                                        Fps::fromValue(refresh_rate_votes_[it->first])});
+                    SFTRACE_FORMAT_INSTANT("SmomoFrameRateOverride");
+                    if (CC_UNLIKELY(mTraceEnabled)) {
+                        trace(*info, LayerVoteType::ExplicitExact,
+                              refresh_rate_votes_[it->first]);
+                    }
+// QTI_END: 2025-02-12: Display: sf: avoid smomo override when game frame rate override is present
+                } else {
+                    if (hasFrameRateOpinionArr && !frameRate.isVoteValidForMrr(isVrrDisplay)) {
                         SFTRACE_FORMAT_INSTANT("Reset layer to ignore explicit vote on MRR %s: %s "
                                                "%s %s",
                                                info->getName().c_str(),
@@ -351,9 +391,8 @@ void LayerHistory::partitionLayers(nsecs_t now) {
                                                to_string(frameRate.vote.rate).c_str(),
                                                ftl::enum_string(frameRate.category).c_str());
                     }
+                    info->resetLayerVote();
                 }
-                info->resetLayerVote();
-            }
 
             it++;
         } else {
@@ -466,4 +505,12 @@ std::pair<Fps, Fps> LayerHistory::getGameFrameRateOverrideLocked(uid_t uid) cons
     return it->second;
 }
 
+// QTI_BEGIN: 2025-02-12: Display: sf: avoid smomo override when game frame rate override is present
+bool LayerHistory::isGameFrameRateOverridePresent() {
+    std::lock_guard lock(mLock);
+
+    return mQtiGameFrameRateOverridePresent;
+}
+
+// QTI_END: 2025-02-12: Display: sf: avoid smomo override when game frame rate override is present
 } // namespace android::scheduler

@@ -99,6 +99,7 @@ cc_test {
 cc_defaults {
     name: "libsurfaceflinger_mocks_defaults",
     defaults: [
+        "libqtisurfaceflingerextension_defaults",
         "android.hardware.graphics.common-ndk_static",
         "android.hardware.graphics.composer3-ndk_static",
         "android.hardware.power-ndk_static",
@@ -108,6 +109,8 @@ cc_defaults {
         "poweradvisor_deps",
     ],
     static_libs: [
+        "libqtisurfaceflingerextension",
+        "libqticompositionengineextension",
         "android.hardware.common-V2-ndk",
         "android.hardware.common.fmq-V1-ndk",
         "android.hardware.graphics.composer@2.1",

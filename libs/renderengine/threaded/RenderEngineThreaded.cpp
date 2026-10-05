@@ -380,6 +380,29 @@ void RenderEngineThreaded::setEnableTracing(bool tracingEnabled) {
     }
     mCondition.notify_one();
 }
+// QTI_BEGIN: 2024-04-09: Display: sf: extensions: Add support for fb scaling
+
+// This is originally owned by AOSP, however it was removed on Android U. Adding this back for FB
+// Scaling.
+void RenderEngineThreaded::setViewportAndProjection(Rect viewPort, Rect sourceCrop) {
+    std::promise<void> resultPromise;
+    std::future<void> resultFuture = resultPromise.get_future();
+    {
+        std::lock_guard lock(mThreadMutex);
+        mFunctionCalls.push(
+                [&resultPromise, viewPort, sourceCrop](renderengine::RenderEngine& instance) {
+// QTI_END: 2024-04-09: Display: sf: extensions: Add support for fb scaling
+                    SFTRACE_NAME("REThreaded::setViewportAndProjection");
+// QTI_BEGIN: 2024-04-09: Display: sf: extensions: Add support for fb scaling
+                    instance.setViewportAndProjection(viewPort, sourceCrop);
+                    resultPromise.set_value();
+                });
+    }
+    mCondition.notify_one();
+    resultFuture.wait();
+}
+
+// QTI_END: 2024-04-09: Display: sf: extensions: Add support for fb scaling
 } // namespace threaded
 } // namespace renderengine
 } // namespace android

@@ -14,6 +14,14 @@
  * limitations under the License.
  */
 
+// QTI_BEGIN: 2023-01-24: Display: sf: Add support for multiple displays
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
+// QTI_END: 2023-01-24: Display: sf: Add support for multiple displays
 // TODO(b/129481165): remove the #pragma below and fix conversion issues
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wconversion"
@@ -35,6 +43,10 @@
 #include "LegacyVirtualDisplaySurface.h"
 #include "SurfaceFlinger.h"
 
+// QTI_BEGIN: 2023-02-26: Display: AidlComposerHal: Add support for QtiComposer3Client
+#include "../QtiExtension/QtiSurfaceFlingerExtensionFactory.h"
+
+// QTI_END: 2023-02-26: Display: AidlComposerHal: Add support for QtiComposer3Client
 #define VDS_LOGE(msg, ...) ALOGE("[%s] " msg, mDisplayName.c_str(), ##__VA_ARGS__)
 #define VDS_LOGW_IF(cond, msg, ...) ALOGW_IF(cond, "[%s] " msg, mDisplayName.c_str(), ##__VA_ARGS__)
 #define VDS_LOGV(msg, ...) ALOGV("[%s] " msg, mDisplayName.c_str(), ##__VA_ARGS__)
@@ -68,6 +80,7 @@ LegacyVirtualDisplaySurface::LegacyVirtualDisplaySurface(HWComposer& hwc,
         mOutputFence(Fence::NO_FENCE),
         mFbProducerSlot(BufferQueue::INVALID_BUFFER_SLOT),
         mOutputProducerSlot(BufferQueue::INVALID_BUFFER_SLOT),
+        mQtiVdsDataSpace(ui::Dataspace::UNKNOWN),
         mForceHwcCopy(SurfaceFlinger::useHwcForRgbToYuv),
         mSecure(secure),
         mSinkUsage(0) {
@@ -88,8 +101,19 @@ LegacyVirtualDisplaySurface::LegacyVirtualDisplaySurface(HWComposer& hwc,
     // on usage bits.
     int sinkUsage;
     sink->query(NATIVE_WINDOW_CONSUMER_USAGE_BITS, &sinkUsage);
+// QTI_BEGIN: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+    if (!mQtiDSExtnIntf) {
+        LegacyFramebufferSurface *fbs = nullptr;
+        mQtiDSExtnIntf = surfaceflingerextension::
+                qtiCreateDisplaySurfaceExtension(/* isVirtual */ true, this, secure, sinkUsage,
+                                                 /* FramebufferSurface */ fbs);
+    }
+// QTI_END: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+// QTI_BEGIN: 2023-01-24: Display: sf: Add support for multiple displays
     mSinkUsage |= (GRALLOC_USAGE_HW_COMPOSER | sinkUsage);
     setOutputUsage(mSinkUsage);
+
+// QTI_END: 2023-01-24: Display: sf: Add support for multiple displays
     if (sinkUsage & (GRALLOC_USAGE_SW_READ_MASK | GRALLOC_USAGE_SW_WRITE_MASK)) {
         int sinkFormat;
         sink->query(NATIVE_WINDOW_FORMAT, &sinkFormat);
@@ -126,6 +150,10 @@ void LegacyVirtualDisplaySurface::onFirstRef() {
 
 LegacyVirtualDisplaySurface::~LegacyVirtualDisplaySurface() {
     mSource[SOURCE_SCRATCH]->disconnect(NATIVE_WINDOW_API_EGL);
+// QTI_BEGIN: 2023-01-24: Display: sf: Add support for multiple displays
+
+    delete mQtiDSExtnIntf;
+// QTI_END: 2023-01-24: Display: sf: Add support for multiple displays
 }
 
 status_t LegacyVirtualDisplaySurface::beginFrame(bool mustRecompose) {
@@ -241,8 +269,11 @@ status_t LegacyVirtualDisplaySurface::advanceFrame(float hdrSdrRatio) {
             hwcBuffer = fbBuffer; // HWC hasn't previously seen this buffer in this slot
         }
         // TODO: Correctly propagate the dataspace from GL composition
+
         result = mHwc.setClientTarget(*halVirtualDisplayId, mFbProducerSlot, mFbFence, hwcBuffer,
-                                      ui::Dataspace::UNKNOWN, hdrSdrRatio);
+// QTI_BEGIN: 2025-06-29: Display: sf: Add FBT WCG blending space support for WFD am: d8cd658cc9 am: d8cd658cc9
+                                      mQtiVdsDataSpace, hdrSdrRatio);
+// QTI_END: 2025-06-29: Display: sf: Add FBT WCG blending space support for WFD am: d8cd658cc9 am: d8cd658cc9
     }
 
     return result;
@@ -344,6 +375,12 @@ status_t LegacyVirtualDisplaySurface::dequeueBuffer(Source source, PixelFormat f
                 __func__, ftl::enum_string(source).c_str(), usage);
     }
 
+// QTI_BEGIN: 2023-01-24: Display: sf: Add support for multiple displays
+    if (mQtiDSExtnIntf && source == SOURCE_SCRATCH) {
+        usage = mQtiDSExtnIntf->qtiExcludeVideoFromScratchBuffer(ftl::enum_string(source), usage);
+    }
+
+// QTI_END: 2023-01-24: Display: sf: Add support for multiple displays
     status_t result =
             mSource[source]->dequeueBuffer(sslot, fence, mSinkBufferWidth, mSinkBufferHeight,
                                            format, usage, nullptr, nullptr);
@@ -512,6 +549,9 @@ status_t LegacyVirtualDisplaySurface::queueBuffer(int pslot, const QueueBufferIn
                     item.mSlot, sslot);
         mFbProducerSlot = mapSource2ProducerSlot(SOURCE_SCRATCH, item.mSlot);
         mFbFence = mSlots[item.mSlot].mFence;
+// QTI_BEGIN: 2025-06-29: Display: sf: Add FBT WCG blending space support for WFD am: d8cd658cc9 am: d8cd658cc9
+        mQtiVdsDataSpace = static_cast<ui::Dataspace>(item.mDataSpace);
+// QTI_END: 2025-06-29: Display: sf: Add FBT WCG blending space support for WFD am: d8cd658cc9 am: d8cd658cc9
 
     } else {
         LOG_FATAL_IF(mCompositionType != CompositionType::Gpu,
@@ -638,6 +678,9 @@ void LegacyVirtualDisplaySurface::resetPerFrameState() {
     mOutputFence = Fence::NO_FENCE;
     mOutputProducerSlot = -1;
     mFbProducerSlot = -1;
+// QTI_BEGIN: 2025-06-29: Display: sf: Add FBT WCG blending space support for WFD am: d8cd658cc9 am: d8cd658cc9
+    mQtiVdsDataSpace = ui::Dataspace::UNKNOWN;
+// QTI_END: 2025-06-29: Display: sf: Add FBT WCG blending space support for WFD am: d8cd658cc9 am: d8cd658cc9
 }
 
 status_t LegacyVirtualDisplaySurface::refreshOutputBuffer() {
@@ -699,6 +742,7 @@ std::string LegacyVirtualDisplaySurface::toString(CompositionType type) {
 void LegacyVirtualDisplaySurface::setOutputUsage(uint64_t /*flag*/) {
 
     mOutputUsage = mSinkUsage;
+    mOutputUsage = mQtiDSExtnIntf->qtiSetOutputUsage(mOutputUsage);
     if (mSecure && (mOutputUsage & GRALLOC_USAGE_HW_VIDEO_ENCODER)) {
         /*TODO: Currently, the framework can only say whether the display
          * and its subsequent session are secure or not. However, there is

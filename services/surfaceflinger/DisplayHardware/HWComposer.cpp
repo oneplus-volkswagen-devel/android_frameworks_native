@@ -527,6 +527,13 @@ status_t HWComposer::setClientTarget(HalDisplayId displayId, uint32_t slot,
                                      ui::Dataspace dataspace, float hdrSdrRatio) {
     RETURN_IF_INVALID_DISPLAY(displayId, BAD_INDEX);
 
+// QTI_BEGIN: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+    auto& displayData = mDisplayData[displayId];
+    if (displayData.validateWasSkipped) {
+        return NO_ERROR;
+    }
+
+// QTI_END: 2023-03-06: Display: SF: Squash commit of SF Extensions.
     ALOGV("%s for display %s", __FUNCTION__, to_string(displayId).c_str());
     auto& hwcDisplay = mDisplayData[displayId].hwcDisplay;
     auto error = hwcDisplay->setClientTarget(slot, target, acquireFence, dataspace, hdrSdrRatio);
@@ -577,6 +584,10 @@ status_t HWComposer::getDeviceCompositionChanges(
     }();
 
     displayData.validateWasSkipped = false;
+// QTI_BEGIN: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+    bool acceptChanges = true;
+// QTI_END: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+
     SFTRACE_FORMAT("NextFrameInterval %d_Hz", frameInterval.getIntValue());
     if (canSkipValidate) {
         sp<Fence> outPresentFence = Fence::NO_FENCE;
@@ -586,15 +597,32 @@ status_t HWComposer::getDeviceCompositionChanges(
         if (!hasChangesError(error)) {
             RETURN_IF_HWC_ERROR_FOR("presentOrValidate", error, displayId, UNKNOWN_ERROR);
         }
-        if (state == 1) { // Present Succeeded.
+// QTI_BEGIN: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+        // state = 0 --> Only Validate.
+        // state = 1 --> Validate and commit succeeded. Skip validate case. No comp changes.
+        // state = 2 --> Validate and commit succeeded. Query Comp changes.
+        if (state == 1 || state == 2) { // Present Succeeded.
+// QTI_END: 2023-03-06: Display: SF: Squash commit of SF Extensions.
             std::unordered_map<HWC2::Layer*, sp<Fence>> releaseFences;
             error = hwcDisplay->getReleaseFences(&releaseFences);
             displayData.releaseFences = std::move(releaseFences);
             displayData.lastPresentFence = outPresentFence;
             displayData.validateWasSkipped = true;
             displayData.presentError = error;
+// QTI_BEGIN: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+            ALOGV("Retrieving fences");
+            //            return NO_ERROR;
+        }
+
+        if (state == 1) {
+            ALOGV("skip validate case present succeeded");
+// QTI_END: 2023-03-06: Display: SF: Squash commit of SF Extensions.
             return NO_ERROR;
         }
+// QTI_BEGIN: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+
+        acceptChanges = (state != 2);
+// QTI_END: 2023-03-06: Display: SF: Squash commit of SF Extensions.
         // Present failed but Validate ran.
     } else {
         error = hwcDisplay->validate(expectedPresentTime, frameInterval.getPeriodNsecs(), &numTypes,
@@ -628,8 +656,12 @@ status_t HWComposer::getDeviceCompositionChanges(
                                                std::move(layerRequests),
                                                std::move(clientTargetProperty),
                                                std::move(layerLuts)});
-    error = hwcDisplay->acceptChanges();
-    RETURN_IF_HWC_ERROR_FOR("acceptChanges", error, displayId, BAD_INDEX);
+// QTI_BEGIN: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+    if (acceptChanges) {
+        error = hwcDisplay->acceptChanges();
+        RETURN_IF_HWC_ERROR_FOR("acceptChanges", error, displayId, BAD_INDEX);
+    }
+// QTI_END: 2023-03-06: Display: SF: Squash commit of SF Extensions.
 
     return NO_ERROR;
 }
@@ -666,6 +698,9 @@ status_t HWComposer::presentAndGetReleaseFences(
     auto& hwcDisplay = displayData.hwcDisplay;
 
     if (displayData.validateWasSkipped) {
+// QTI_BEGIN: 2024-04-09: Display: sf: extensions: Fix flickers seen with FB Scaling enabled
+        displayData.validateWasSkipped = false;
+// QTI_END: 2024-04-09: Display: sf: extensions: Fix flickers seen with FB Scaling enabled
         // explicitly flush all pending commands
         auto error = static_cast<hal::Error>(mComposer->executeCommands(hwcDisplay->getId()));
         RETURN_IF_HWC_ERROR_FOR("executeCommands", error, displayId, UNKNOWN_ERROR);
@@ -691,6 +726,8 @@ status_t HWComposer::presentAndGetReleaseFences(
 }
 
 status_t HWComposer::executeCommands(HalDisplayId displayId) {
+    RETURN_IF_INVALID_DISPLAY(displayId, BAD_INDEX);
+
     auto& hwcDisplay = mDisplayData[displayId].hwcDisplay;
     auto error = static_cast<hal::Error>(mComposer->executeCommands(hwcDisplay->getId()));
     RETURN_IF_HWC_ERROR_FOR("executeCommands", error, displayId, UNKNOWN_ERROR);

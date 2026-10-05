@@ -71,6 +71,7 @@ public:
         mRenderEngine->rdocCaptureNextFrame();
     }
 
+    void setViewportAndProjection(Rect viewPort, Rect sourceCrop) override;
 protected:
     void mapExternalTextureBuffer(const sp<GraphicBuffer>& buffer, bool isRenderable) override;
     void unmapExternalTextureBuffer(sp<GraphicBuffer>&& buffer) override;

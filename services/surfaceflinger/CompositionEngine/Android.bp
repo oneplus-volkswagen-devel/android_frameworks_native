@@ -48,6 +48,7 @@ cc_defaults {
         "libprocessgroup",
         "libprocessgroup_util",
         "libjsoncpp",
+        "libsurfaceflinger_common",
     ],
     header_libs: [
         "android.hardware.graphics.composer@2.1-command-buffer",
@@ -91,11 +92,13 @@ cc_library {
     defaults: [
         "libcompositionengine_defaults",
         "libsurfaceflinger_common_deps",
+        "libqtisurfaceflingerextension_defaults",
     ],
     cflags: select(soong_config_variable("surfaceflinger", "udfps_lib"), {
         any @ flag_val: ["-DTARGET_PROVIDES_UDFPS_LIB"],
         default: [],
     }),
+    static_libs: ["libqticompositionengineextension"],
     whole_static_libs: select(soong_config_variable("surfaceflinger", "udfps_lib"), {
         any @ flag_val: [flag_val],
         default: ["surfaceflinger_udfps_lib"],
@@ -175,6 +178,8 @@ cc_test {
         "libsurfaceflinger_backend_mock_headers",
     ],
     static_libs: [
+        "libqtisurfaceflingerextension",
+        "libqticompositionengineextension",
         "libcompositionengine_mocks",
         "libflagtest",
         "libgmock",

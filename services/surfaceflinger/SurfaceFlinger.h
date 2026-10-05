@@ -13,6 +13,18 @@
  * limitations under the License.
  */
 
+// QTI_BEGIN: 2023-01-17: Display: sf: Introduce QTI Extensions in AOSP
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+// QTI_END: 2023-01-17: Display: sf: Introduce QTI Extensions in AOSP
+// QTI_BEGIN: 2024-02-29: Display: sf: consider smomo vote for content detection
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+// QTI_END: 2024-02-29: Display: sf: consider smomo vote for content detection
+// QTI_BEGIN: 2023-01-17: Display: sf: Introduce QTI Extensions in AOSP
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
+// QTI_END: 2023-01-17: Display: sf: Introduce QTI Extensions in AOSP
 #pragma once
 
 #include <sys/types.h>
@@ -175,6 +187,20 @@ namespace renderengine {
 class RenderEngine;
 } // namespace renderengine
 
+// QTI_BEGIN: 2023-01-17: Display: sf: Introduce QTI Extensions in AOSP
+namespace surfaceflingerextension {
+class QtiSurfaceFlingerExtension;
+// QTI_END: 2023-01-17: Display: sf: Introduce QTI Extensions in AOSP
+// QTI_BEGIN: 2023-01-24: Display: sf: Add support for multiple displays
+class QtiNullExtension;
+// QTI_END: 2023-01-24: Display: sf: Add support for multiple displays
+// QTI_BEGIN: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+class QtiSurfaceFlingerExtensionIntf;
+// QTI_END: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+// QTI_BEGIN: 2023-01-17: Display: sf: Introduce QTI Extensions in AOSP
+} // namespace surfaceflingerextension
+
+// QTI_END: 2023-01-17: Display: sf: Introduce QTI Extensions in AOSP
 enum {
     eTransactionNeeded = 0x01,
     eTraversalNeeded = 0x02,
@@ -354,6 +380,11 @@ public:
         return sFrontInternalDisplayRotationFlags;
     }
 
+// QTI_BEGIN: 2024-02-28: Display: sf: Add check to acquire mStateLock in qtiCheckVirtualDisplayHint
+    bool mRequestDisplayModeFlag = false;
+    std::thread::id mFlagThread = std::this_thread::get_id();
+
+// QTI_END: 2024-02-28: Display: sf: Add check to acquire mStateLock in qtiCheckVirtualDisplayHint
 protected:
     // We're reference counted, never destroy SurfaceFlinger directly
     virtual ~SurfaceFlinger();
@@ -381,6 +412,12 @@ private:
     friend class RegionSamplingThread;
     friend class SurfaceComposerAIDL;
 
+// QTI_BEGIN: 2023-01-17: Display: sf: Introduce QTI Extensions in AOSP
+    friend class ::android::surfaceflingerextension::QtiSurfaceFlingerExtension;
+// QTI_END: 2023-01-17: Display: sf: Introduce QTI Extensions in AOSP
+// QTI_BEGIN: 2023-01-24: Display: sf: Add support for multiple displays
+    friend class ::android::surfaceflingerextension::QtiNullExtension;
+// QTI_END: 2023-01-24: Display: sf: Add support for multiple displays
     // For unit tests
     friend class TestableSurfaceFlinger;
     friend class TransactionApplicationTest;
@@ -1215,7 +1252,11 @@ private:
             std::shared_ptr<compositionengine::Display> compositionDisplay,
             const DisplayDeviceState& state,
             const sp<compositionengine::DisplaySurface>& displaySurface,
-            const sp<Surface>& compositionSurface) REQUIRES(mStateLock);
+            const sp<Surface>& compositionSurface,
+// QTI_BEGIN: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+            surfaceflingerextension::QtiDisplaySurfaceExtensionIntf* mQtiDSExtnIntf = nullptr)
+            REQUIRES(mStateLock);
+// QTI_END: 2023-03-06: Display: SF: Squash commit of SF Extensions.
     void processDisplayChangesLocked()
             REQUIRES(mStateLock, mModeTransitionMutex, kMainThreadContext);
     void processDisplayAdded(const wp<IBinder>& displayToken, const DisplayDeviceState&)
@@ -1684,6 +1725,13 @@ private:
     // Whether a display should be turned on when initialized
     bool mSkipPowerOnForQuiescent;
 
+// QTI_BEGIN
+    bool mIsPowerFeatureEnabled = false;
+    int mVideoGeometryStableFrameCount = 0;
+    void evaluateVideoLayerPowerSaving(int latchedLayerCount, int activeDisplayFps,
+                                       bool isSteadyStateVideo);
+// QTI_END
+
     // used for omitting vsync callbacks to apps when the display is not updatable
     int mRefreshableDisplays GUARDED_BY(kMainThreadContext) = 0;
     void incRefreshableDisplays() REQUIRES(kMainThreadContext);
@@ -1704,6 +1752,14 @@ private:
     // These classes do not store any client state but help with managing transaction callbacks
     // and stats.
     std::unordered_map<uint32_t, sp<Layer>> mLegacyLayers GUARDED_BY(kMainThreadContext);
+
+// QTI_BEGIN: 2023-01-17: Display: sf: Introduce QTI Extensions in AOSP
+    surfaceflingerextension::QtiSurfaceFlingerExtensionIntf* mQtiSFExtnIntf = nullptr;
+// QTI_END: 2023-01-17: Display: sf: Introduce QTI Extensions in AOSP
+// QTI_BEGIN: 2024-02-29: Display: sf: consider smomo vote for content detection
+    std::mutex mSmomoMutex;
+// QTI_END: 2024-02-29: Display: sf: consider smomo vote for content detection
+
 
     TransactionHandler mTransactionHandler GUARDED_BY(kMainThreadContext);
     ui::DisplayMap<ui::LayerStack, frontend::DisplayInfo> mFrontEndDisplayInfos

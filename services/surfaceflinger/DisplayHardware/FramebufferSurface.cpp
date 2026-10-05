@@ -45,6 +45,10 @@
 #include "HwcSlotTracker.h"
 #include "MutexUtils.h"
 
+// QTI_BEGIN: 2023-05-29: Display: sf: extensions: Clean up
+#include "../QtiExtension/QtiSurfaceFlingerExtensionFactory.h"
+
+// QTI_END: 2023-05-29: Display: sf: extensions: Clean up
 namespace android {
 
 using ui::Dataspace;
@@ -56,6 +60,14 @@ FramebufferSurface::FramebufferSurface(HWComposer& hwc, PhysicalDisplayId displa
 
     std::tie(mRendererConsumer, mRendererSurface) = BufferItemConsumer::create(
             GRALLOC_USAGE_HW_FB | GRALLOC_USAGE_HW_RENDER | GRALLOC_USAGE_HW_COMPOSER);
+
+// QTI_BEGIN
+    if (!mQtiDSExtnIntf) {
+        mQtiDSExtnIntf = surfaceflingerextension::
+                qtiCreateDisplaySurfaceExtension(/* isVirtual */ false, nullptr, false, 0,
+                                                 /* FramebufferSurface */ this);
+    }
+// QTI_END
 
     mRendererConsumer->setName(String8("FramebufferSurface"));
     mRendererConsumer->setDefaultBufferSize(mLimitedSize.width, mLimitedSize.height);
@@ -98,11 +110,15 @@ status_t FramebufferSurface::advanceFrame(float hdrSdrRatio) {
                                                         onBufferFreedLocked(buffer);
                                                     });
     if (err == BufferQueue::NO_BUFFER_AVAILABLE) {
-        mDataspace = Dataspace::UNKNOWN;
+// QTI_BEGIN: 2023-06-20: Display: sf: Fix spec fence for SDM caching
+        // mDataspace = Dataspace::UNKNOWN;
+// QTI_END: 2023-06-20: Display: sf: Fix spec fence for SDM caching
         return NO_ERROR;
     } else if (err != NO_ERROR) {
         ALOGE("error acquiring buffer: %s (%d)", strerror(-err), err);
-        mDataspace = Dataspace::UNKNOWN;
+// QTI_BEGIN: 2023-06-20: Display: sf: Fix spec fence for SDM caching
+        // mDataspace = Dataspace::UNKNOWN;
+// QTI_END: 2023-06-20: Display: sf: Fix spec fence for SDM caching
         return err;
     }
 

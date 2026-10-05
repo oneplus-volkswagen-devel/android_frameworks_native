@@ -14,6 +14,14 @@
  * limitations under the License.
  */
 
+// QTI_BEGIN: 2023-01-24: Display: sf: Add support for multiple displays
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
+// QTI_END: 2023-01-24: Display: sf: Add support for multiple displays
 #include <SurfaceFlingerProperties.sysprop.h>
 #include <android-base/stringprintf.h>
 #include <common/FlagManager.h>
@@ -62,6 +70,11 @@
 
 #include "TracedOrdinal.h"
 
+// QTI_BEGIN: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+#include "../QtiExtension/QtiOutputExtension.h"
+using android::compositionengineextension::QtiOutputExtension;
+
+// QTI_END: 2023-03-06: Display: SF: Squash commit of SF Extensions.
 using aidl::android::hardware::graphics::composer3::Composition;
 
 namespace android::compositionengine {
@@ -110,6 +123,11 @@ std::shared_ptr<Output> createOutput(
     return createOutputTemplated<Output>(compositionEngine);
 }
 
+// QTI_BEGIN: 2023-01-24: Display: sf: Add support for multiple displays
+Output::Output() {
+}
+
+// QTI_END: 2023-01-24: Display: sf: Add support for multiple displays
 Output::~Output() = default;
 
 bool Output::isValid() const {
@@ -893,8 +911,17 @@ void Output::updateCompositionState(const compositionengine::CompositionRefreshA
     for (auto* layer : getOutputLayersOrderedByZ()) {
         const ui::LayerStack outputLayerStack =
                 layer->getOutput().getState().layerFilter.layerStack;
-        const bool layerForceClientComposition =
+        bool layerForceClientComposition =
                 refreshArgs.forcedClientCompositionLayerStacks.contains(outputLayerStack);
+        // QTI_BEGIN
+        if (layerForceClientComposition && QtiOutputExtension::qtiAllowSecCamConcurrency() &&
+            !refreshArgs.mQtiEnforceGpuComp) {
+            const auto* layerFEState = layer->getLayerFE().getCompositionState();
+            if (layerFEState && layerFEState->qtiIsSecureCamera) {
+                layerForceClientComposition = false;
+            }
+        }
+        // QTI_END
 
         layer->updateCompositionState(refreshArgs.updatingGeometryThisFrame,
                                       layerForceClientComposition || forceClientComposition,
@@ -1000,8 +1027,18 @@ void Output::writeCompositionState(const compositionengine::CompositionRefreshAr
                     z, includeGeometry, overrideZ, isPeekingThrough,
                     layer->requiresClientComposition());
         }
+// QTI_BEGIN: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+
+        QtiOutputExtension::qtiWriteLayerFlagToHWC(layer->getHwcLayer(), this);
+        // QTI_END
+// QTI_END: 2023-03-06: Display: SF: Squash commit of SF Extensions.
     }
     editState().outputLayerHash = outputLayerHash;
+// QTI_BEGIN: 2023-06-15: Display: sf: extensions: Reduce instructions in SmoMo & LayerExt update
+
+    QtiOutputExtension::qtiGetVisibleLayerInfo(this);
+    // QTI_END
+// QTI_END: 2023-06-15: Display: sf: extensions: Reduce instructions in SmoMo & LayerExt update
 }
 
 compositionengine::OutputLayer* Output::findLayerRequestingBackgroundComposition() const {
@@ -1116,24 +1153,50 @@ compositionengine::Output::ColorProfile Output::pickColorProfile(
     bool isHdrClientComposition = false;
     ui::Dataspace bestDataSpace = getBestDataspace(&hdrDataSpace, &isHdrClientComposition);
 
-    switch (refreshArgs.forceOutputColorMode) {
-        case ui::ColorMode::SRGB:
-            bestDataSpace = ui::Dataspace::V0_SRGB;
-            break;
-        case ui::ColorMode::DISPLAY_P3:
-            bestDataSpace = ui::Dataspace::DISPLAY_P3;
-            break;
-        default:
-            break;
+    // QTI_BEGIN
+    bool qtiEnableDynamicDataspace = QtiOutputExtension::qtiRenderSysuiAsSrgb();
+
+    if (!(qtiEnableDynamicDataspace && bestDataSpace == ui::Dataspace::V0_SRGB)) {
+        // QTI_END
+        switch (refreshArgs.forceOutputColorMode) {
+            case ui::ColorMode::SRGB:
+                bestDataSpace = ui::Dataspace::V0_SRGB;
+                break;
+            case ui::ColorMode::DISPLAY_P3:
+                bestDataSpace = ui::Dataspace::DISPLAY_P3;
+                break;
+                // QTI_BEGIN: 2025-09-10: Display: sf:BT2020: Add BT2020 blending space support for
+                // BT2020 gamut
+            case ui::ColorMode::DISPLAY_BT2020:
+                bestDataSpace = ui::Dataspace::DISPLAY_BT2020;
+                break;
+                // QTI_END: 2025-09-10: Display: sf:BT2020: Add BT2020 blending space support for
+                // BT2020 gamut
+            default:
+                break;
+        }
+        // QTI_BEGIN
     }
+    // QTI_END
 
     // respect hdrDataSpace only when there is no legacy HDR support
-    const bool isHdr = hdrDataSpace != ui::Dataspace::UNKNOWN &&
+// QTI_BEGIN: 2023-01-24: Display: sf: Add support for multiple displays
+    bool isHdr = hdrDataSpace != ui::Dataspace::UNKNOWN &&
+// QTI_END: 2023-01-24: Display: sf: Add support for multiple displays
             !mDisplayColorProfile->hasLegacyHdrSupport(hdrDataSpace) && !isHdrClientComposition;
     if (isHdr) {
         bestDataSpace = hdrDataSpace;
     }
 
+// QTI_BEGIN: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+    if (QtiOutputExtension::qtiHasSecureDisplay(this)) {
+// QTI_END: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+// QTI_BEGIN: 2023-01-24: Display: sf: Add support for multiple displays
+        bestDataSpace = ui::Dataspace::V0_SRGB;
+        isHdr = false;
+    }
+
+// QTI_END: 2023-01-24: Display: sf: Add support for multiple displays
     ui::RenderIntent intent;
     switch (refreshArgs.outputColorSetting) {
         case OutputColorSetting::kManaged:
@@ -1364,8 +1427,11 @@ void Output::finishFrame(GpuCompositionResult&& result) {
 void Output::updateProtectedContentState() {
     const auto& outputState = getState();
     auto& renderEngine = getCompositionEngine().getRenderEngine();
-    const bool supportsProtectedContent = renderEngine.supportsProtectedContent();
+// QTI_BEGIN: 2023-01-24: Display: sf: Add support for multiple displays
 
+    bool supportsProtectedContent = renderEngine.supportsProtectedContent();
+
+// QTI_END: 2023-01-24: Display: sf: Add support for multiple displays
     // We need to set the render surface as protected (DRM) if all the following conditions are met:
     // 1. The display is protected (in legacy, check if the display is secure)
     // 2. Protected content is supported
@@ -1375,6 +1441,10 @@ void Output::updateProtectedContentState() {
         bool needsProtected = std::any_of(layers.begin(), layers.end(), [](auto* layer) {
             return layer->getLayerFE().getCompositionState()->hasProtectedContent;
         });
+// QTI_BEGIN: 2023-04-28: Display: sf: Fix secure to nonsecure transitions
+
+        needsProtected = needsProtected && QtiOutputExtension::qtiIsProtectedContent(this);
+// QTI_END: 2023-04-28: Display: sf: Fix secure to nonsecure transitions
         if (needsProtected != mRenderSurface->isProtected()) {
             mRenderSurface->setProtected(needsProtected);
         }
@@ -1442,7 +1512,13 @@ std::optional<base::unique_fd> Output::composeSurfaces(
     OutputCompositionState& outputCompositionState = editState();
     // Check if the client composition requests were rendered into the provided graphic buffer. If
     // so, we can reuse the buffer and avoid client composition.
-    if (mClientCompositionRequestCache) {
+// QTI_BEGIN: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+    if (mClientCompositionRequestCache
+// QTI_END: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+// QTI_BEGIN: 2023-05-24: Display: CompositionEngine: Avoid disabling SF Client Composition Caching
+        && (!QtiOutputExtension::qtiUseSpecFence() || mLayerRequestingBackgroundBlur != nullptr)
+// QTI_END: 2023-05-24: Display: CompositionEngine: Avoid disabling SF Client Composition Caching
+        ) {
         if (mClientCompositionRequestCache->exists(tex->getBuffer()->getId(),
                                                    clientCompositionDisplay,
                                                    clientCompositionLayers)) {

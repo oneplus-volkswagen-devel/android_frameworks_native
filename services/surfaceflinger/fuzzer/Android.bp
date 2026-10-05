@@ -29,6 +29,8 @@ cc_defaults {
     name: "surfaceflinger_fuzz_defaults",
     static_libs: [
         "libsurfaceflinger_common",
+        "libqtisurfaceflingerextension",
+        "libqticompositionengineextension",
     ],
     srcs: [
         ":libsurfaceflinger_backend_mock_sources",

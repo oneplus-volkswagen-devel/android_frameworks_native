@@ -14,6 +14,14 @@
  * limitations under the License.
  */
 
+// QTI_BEGIN: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
+// QTI_END: 2023-03-06: Display: SF: Squash commit of SF Extensions.
 #pragma once
 
 #include <android/gui/DropInputMode.h>
@@ -417,6 +425,23 @@ public:
     // Check if the damage region is a small dirty.
     void setIsSmallDirty(frontend::LayerSnapshot* snapshot);
 
+// QTI_BEGIN: 2024-07-19: Display: sf: use correct layer stack id in smomo
+    void qtiSetSmomoLayerStackId(uint32_t id);
+// QTI_END: 2024-07-19: Display: sf: use correct layer stack id in smomo
+// QTI_BEGIN: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+    uint32_t qtiGetSmomoLayerStackId();
+// QTI_END: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+// QTI_BEGIN: 2024-01-29: Display: sf: enable layerext in Android V
+    uint32_t qtiGetLayerClass() { return mQtiLayerClass; };
+// QTI_END: 2024-01-29: Display: sf: enable layerext in Android V
+// QTI_BEGIN: 2025-01-07: Display: sf: Update LayerFE's composition state before composition
+    bool qtiIsSecureDisplay() { return mQtiIsSecureDisplay; };
+    bool qtiIsSecureCamera() { return mQtiIsSecureCamera; };
+// QTI_END: 2025-01-07: Display: sf: Update LayerFE's composition state before composition
+// QTI_BEGIN
+    uint64_t getUsage() { return (hasBuffer() ? mBufferInfo.mBuffer->getUsage() : 0); }
+// QTI_END
+
 protected:
     // For unit tests
     friend class TestableSurfaceFlinger;
@@ -451,6 +476,13 @@ protected:
     // TODO: Deprecate the '--latency-clear' and get rid of this.
     std::atomic<uint32_t> mFrameStatsHistorySize;
 
+// QTI_BEGIN: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+    uint32_t mQtiLayerClass{0};
+// QTI_END: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+// QTI_BEGIN: 2025-01-07: Display: sf: Update LayerFE's composition state before composition
+    bool mQtiIsSecureDisplay = false;
+    bool mQtiIsSecureCamera = false;
+// QTI_END: 2025-01-07: Display: sf: Update LayerFE's composition state before composition
     // main thread
     sp<NativeHandle> mSidebandStream;
 
@@ -569,6 +601,9 @@ private:
     // not specify a destination frame.
     ui::Transform mRequestedTransform;
 
+// QTI_BEGIN: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+    uint32_t qtiSmomoLayerStackId = UINT32_MAX;
+// QTI_END: 2023-03-06: Display: SF: Squash commit of SF Extensions.
     std::vector<std::pair<frontend::LayerHierarchy::TraversalPath, sp<LayerFE>>> mLayerFEs;
     bool mHandleAlive = false;
     std::optional<std::reference_wrapper<scheduler::FrameTimeline>> getTimeline() const {

@@ -295,6 +295,7 @@ public:
 
     virtual void rdocCaptureNextFrame() {};
 
+    virtual void setViewportAndProjection(Rect viewPort, Rect sourceCrop) = 0;
 protected:
     RenderEngine() : RenderEngine(Threaded::No) {}
 

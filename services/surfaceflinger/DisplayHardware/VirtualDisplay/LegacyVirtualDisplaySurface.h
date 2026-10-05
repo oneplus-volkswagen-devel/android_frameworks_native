@@ -14,6 +14,14 @@
  * limitations under the License.
  */
 
+// QTI_BEGIN: 2023-01-24: Display: sf: Add support for multiple displays
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
+// QTI_END: 2023-01-24: Display: sf: Add support for multiple displays
 #pragma once
 
 #include <string>
@@ -24,8 +32,23 @@
 #include <gui/IGraphicBufferProducer.h>
 #include <ui/DisplayId.h>
 
+// QTI_BEGIN: 2023-01-24: Display: sf: Add support for multiple displays
+#include "../QtiExtension/QtiDisplaySurfaceExtensionIntf.h"
+
+// QTI_END: 2023-01-24: Display: sf: Add support for multiple displays
 namespace android {
 
+// QTI_BEGIN: 2023-01-24: Display: sf: Add support for multiple displays
+namespace surfaceflingerextension {
+class QtiDisplaySurfaceExtensionIntf;
+// QTI_END: 2023-01-24: Display: sf: Add support for multiple displays
+// QTI_BEGIN: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+class QtiVirtualDisplaySurfaceExtension;
+// QTI_END: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+// QTI_BEGIN: 2023-01-24: Display: sf: Add support for multiple displays
+} // namespace surfaceflingerextension
+
+// QTI_END: 2023-01-24: Display: sf: Add support for multiple displays
 class HWComposer;
 class IProducerListener;
 
@@ -88,6 +111,13 @@ public:
 
     void onFirstRef() override;
 
+// QTI_BEGIN: 2023-01-24: Display: sf: Add support for multiple displays
+    virtual android::surfaceflingerextension::QtiDisplaySurfaceExtensionIntf*
+    qtiGetDisplaySurfaceExtn() {
+        return mQtiDSExtnIntf;
+    }
+
+// QTI_END: 2023-01-24: Display: sf: Add support for multiple displays
 private:
     LegacyVirtualDisplaySurface(HWComposer&, VirtualDisplayIdVariant, const sp<Surface>& sink,
                                 const std::string& name,
@@ -230,6 +260,13 @@ private:
     int mFbProducerSlot;
     int mOutputProducerSlot;
 
+// QTI_BEGIN: 2025-06-29: Display: sf: Add FBT WCG blending space support for WFD am: d8cd658cc9 am: d8cd658cc9
+    // mDataSpace is the dataspace of the current composition buffer for
+    // this VirtualDisplaySurface. It will be 0 when HWC is doing the
+    // compositing.
+    ui::Dataspace mQtiVdsDataSpace;
+
+// QTI_END: 2025-06-29: Display: sf: Add FBT WCG blending space support for WFD am: d8cd658cc9 am: d8cd658cc9
     // Debug only -- track the sequence of events in each frame so we can make
     // sure they happen in the order we expect. This class implicitly models
     // a state machine; this enum/variable makes it explicit.
@@ -273,6 +310,13 @@ private:
     bool mForceHwcCopy;
     bool mSecure;
     int mSinkUsage;
+
+// QTI_BEGIN: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+    friend class android::surfaceflingerextension::QtiVirtualDisplaySurfaceExtension;
+// QTI_END: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+// QTI_BEGIN: 2023-01-24: Display: sf: Add support for multiple displays
+    android::surfaceflingerextension::QtiDisplaySurfaceExtensionIntf* mQtiDSExtnIntf = nullptr;
+// QTI_END: 2023-01-24: Display: sf: Add support for multiple displays
 };
 
 } // namespace android

@@ -583,7 +583,7 @@ TEST_F(DisplayTransactionCommitTest, acquireHalVirtualDisplayId) {
     const std::string name("virtual.test");
     auto builder = compositionengine::DisplayCreationArgsBuilder();
     auto virtualDisplayIdVariantOpt =
-            mFlinger.acquireVirtualDisplay(kResolution, format, name, builder);
+            mFlinger.acquireVirtualDisplay(kResolution, format, name, builder, true);
 
     ASSERT_TRUE(virtualDisplayIdVariantOpt);
     ASSERT_TRUE(std::holds_alternative<HalVirtualDisplayId>(*virtualDisplayIdVariantOpt));
@@ -613,7 +613,7 @@ TEST_F(DisplayTransactionCommitTest, acquireGpuVirtualDisplayId) {
     const std::string name("virtual.test");
     auto builder = compositionengine::DisplayCreationArgsBuilder();
     auto virtualDisplayIdVariantOpt =
-            mFlinger.acquireVirtualDisplay(kResolution, format, name, builder);
+            mFlinger.acquireVirtualDisplay(kResolution, format, name, builder, false);
 
     ASSERT_TRUE(virtualDisplayIdVariantOpt);
     ASSERT_TRUE(std::holds_alternative<GpuVirtualDisplayId>(*virtualDisplayIdVariantOpt));
@@ -645,7 +645,7 @@ TEST_F(DisplayTransactionCommitTest, acquireGpuVirtualDisplayIdFailure) {
     const std::string name("virtual.test");
     auto builder = compositionengine::DisplayCreationArgsBuilder();
     auto virtualDisplayIdVariantOpt =
-            mFlinger.acquireVirtualDisplay(kResolution, format, name, builder);
+            mFlinger.acquireVirtualDisplay(kResolution, format, name, builder, false);
 
     ASSERT_FALSE(virtualDisplayIdVariantOpt);
 }
@@ -699,7 +699,7 @@ TEST_F(DisplayTransactionCommitTest, acquireHalVirtualDisplayIdWithConflictResol
     const std::string name("virtual.test");
     auto builder = compositionengine::DisplayCreationArgsBuilder();
     auto virtualDisplayIdVariantOpt =
-            mFlinger.acquireVirtualDisplay(kResolution, format, name, builder);
+            mFlinger.acquireVirtualDisplay(kResolution, format, name, builder, true);
 
     ASSERT_TRUE(virtualDisplayIdVariantOpt);
     ASSERT_TRUE(std::holds_alternative<HalVirtualDisplayId>(*virtualDisplayIdVariantOpt));
@@ -748,7 +748,7 @@ TEST_F(DisplayTransactionCommitTest, acquireGpuVirtualDisplayIdWithConflictResol
     const std::string name("virtual.test");
     auto builder = compositionengine::DisplayCreationArgsBuilder();
     auto virtualDisplayIdVariantOpt =
-            mFlinger.acquireVirtualDisplay(kResolution, format, name, builder);
+            mFlinger.acquireVirtualDisplay(kResolution, format, name, builder, false);
 
     ASSERT_TRUE(virtualDisplayIdVariantOpt);
     ASSERT_TRUE(std::holds_alternative<GpuVirtualDisplayId>(*virtualDisplayIdVariantOpt));
@@ -798,7 +798,7 @@ TEST_F(DisplayTransactionCommitTest, acquireVirtualDisplayIdWithConflictResoluti
     static const std::string name("virtual.test");
     auto builder = compositionengine::DisplayCreationArgsBuilder();
     auto virtualDisplayIdVariantOpt =
-            mFlinger.acquireVirtualDisplay(kResolution, format, name, builder);
+            mFlinger.acquireVirtualDisplay(kResolution, format, name, builder, true);
 
     ASSERT_FALSE(virtualDisplayIdVariantOpt);
 }
