@@ -10,7 +10,6 @@ package {
 
 cc_defaults {
     name: "libsurfaceflinger_proto_deps",
-    export_include_dirs: ["include"],
     static_libs: [
         "libperfetto_client_experimental",
     ],
@@ -32,6 +31,7 @@ cc_defaults {
     header_libs: [
         "libsurfaceflinger_proto_headers",
     ],
+    export_header_lib_headers: ["libsurfaceflinger_proto_headers"],
 }
 
 cc_library_headers {
