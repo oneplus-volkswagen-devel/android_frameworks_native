@@ -45,9 +45,9 @@ private:
     bool mConnectedToGpu;
     int mUID;
     int mClientSetBufferCount;
-    float mFrameRate;
-    int8_t mCompatibility;
-    int8_t mChangeFrameRateStrategy;
+    float mFrameRate = 0.0f;
+    int8_t mCompatibility = 0;
+    int8_t mChangeFrameRateStrategy = 0;
     int mSessionConflictRetryCount;
 
     nsecs_t mLastSessionConflictRetryTimestamp;
@@ -75,4 +75,3 @@ private:
 
 } // namespace libguiextension
 } // namespace android
-
