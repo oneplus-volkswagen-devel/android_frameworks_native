@@ -23,18 +23,22 @@
 #include <thread>
 
 // QTI_BEGIN: 2025-05-12: Performance: Add a new feature for GPU big jank detection by monitoring GPU completion in FenceMonitor
+#ifndef NO_BINDER
 #include "QtiExtension/QtiFenceMonitorExtension.h"
 
 #define GPU_NAME "GPU completion"
+#endif
 
 // QTI_END: 2025-05-12: Performance: Add a new feature for GPU big jank detection by monitoring GPU completion in FenceMonitor
 namespace android::gui {
 
 FenceMonitor::FenceMonitor(const char* name) : mName(name), mFencesQueued(0), mFencesSignaled(0) {
 // QTI_BEGIN: 2025-05-12: Performance: Add a new feature for GPU big jank detection by monitoring GPU completion in FenceMonitor
+#ifndef NO_BINDER
     if (strcmp(name, GPU_NAME) == 0) {
         mQtiFenceMonitorExtn = libguiextension::QtiFenceMonitorExtension::qtiGetInstance(this);
     }
+#endif
 // QTI_END: 2025-05-12: Performance: Add a new feature for GPU big jank detection by monitoring GPU completion in FenceMonitor
     std::thread thread(&FenceMonitor::loop, this);
     pthread_setname_np(thread.native_handle(), mName);
@@ -91,15 +95,19 @@ void FenceMonitor::threadLoop() {
         ATRACE_NAME(message);
 
 // QTI_BEGIN: 2025-05-12: Performance: Add a new feature for GPU big jank detection by monitoring GPU completion in FenceMonitor
+#ifndef NO_BINDER
         if (mQtiFenceMonitorExtn) {
             mQtiFenceMonitorExtn->qtiQueueFence(true);
         }
+#endif
 // QTI_END: 2025-05-12: Performance: Add a new feature for GPU big jank detection by monitoring GPU completion in FenceMonitor
         status_t result = fence->waitForever(message);
 // QTI_BEGIN: 2025-05-12: Performance: Add a new feature for GPU big jank detection by monitoring GPU completion in FenceMonitor
+#ifndef NO_BINDER
         if (mQtiFenceMonitorExtn) {
             mQtiFenceMonitorExtn->qtiQueueFence(false);
         }
+#endif
 // QTI_END: 2025-05-12: Performance: Add a new feature for GPU big jank detection by monitoring GPU completion in FenceMonitor
         if (result != OK) {
             ALOGE("Error waiting for fence: %d", result);

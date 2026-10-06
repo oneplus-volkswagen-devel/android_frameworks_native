@@ -70,9 +70,11 @@
 #include <com_android_graphics_libgui_flags.h>
 
 // QTI_BEGIN: 2025-05-12: Performance: Add a new feature for GPU big jank detection by monitoring GPU completion in FenceMonitor
+#ifndef NO_BINDER
 #include "QtiExtension/QtiFenceMonitorExtension.h"
 #include "QtiExtension/QtiSurfaceExtension.h"
 #include "QtiExtension/QtiSurfaceExtensionGPP.h"
+#endif
 
 // QTI_END: 2025-05-12: Performance: Add a new feature for GPU big jank detection by monitoring GPU completion in FenceMonitor
 // QTI_BEGIN: 2024-02-29: Display: gui: set buffer dequeue duration in buffer private meta data
@@ -212,6 +214,7 @@ Surface::Surface(const sp<IGraphicBufferProducer>& bufferProducer, bool controll
 
 // QTI_BEGIN: 2024-02-29: Display: gui: set buffer dequeue duration in buffer private meta data
 
+#if !defined(NO_BINDER)
     char value[PROPERTY_VALUE_MAX];
 // QTI_END: 2024-02-29: Display: gui: set buffer dequeue duration in buffer private meta data
 // QTI_BEGIN: 2024-04-07: Display: gui: use mapper5 for setting vendor metadata.
@@ -224,7 +227,6 @@ Surface::Surface(const sp<IGraphicBufferProducer>& bufferProducer, bool controll
 // QTI_BEGIN: 2024-02-29: Display: gui: set buffer dequeue duration in buffer private meta data
     }
 // QTI_END: 2024-02-29: Display: gui: set buffer dequeue duration in buffer private meta data
-#if !defined(NO_BINDER)
 // QTI_BEGIN: 2024-06-26: Video: gui: Introduce QTI Extensions in AOSP for Game Post Processing.
     property_get("vendor.gpp.create_frc_extension", value, "0");
     intValue = atoi(value);
@@ -240,6 +242,7 @@ Surface::Surface(const sp<IGraphicBufferProducer>& bufferProducer, bool controll
 }
 
 Surface::~Surface() {
+#ifndef NO_BINDER
 // QTI_BEGIN: 2024-04-07: Display: gui: use mapper5 for setting vendor metadata.
     if (mQtiSurfaceExtn) {
         delete mQtiSurfaceExtn;
@@ -247,6 +250,7 @@ Surface::~Surface() {
 // QTI_END: 2024-04-07: Display: gui: use mapper5 for setting vendor metadata.
 // QTI_BEGIN: 2024-06-26: Video: gui: Introduce QTI Extensions in AOSP for Game Post Processing.
     mQtiSurfaceGPPExtn = nullptr;
+#endif
 // QTI_END: 2024-06-26: Video: gui: Introduce QTI Extensions in AOSP for Game Post Processing.
 
     if (mConnectedToCpu) {
@@ -331,9 +335,11 @@ void Surface::setSidebandStream(const sp<NativeHandle>& stream) {
     mGraphicBufferProducer->setSidebandStream(stream);
 // QTI_BEGIN: 2024-06-26: Video: gui: Introduce QTI Extensions in AOSP for Game Post Processing.
 
+#ifndef NO_BINDER
     if (mQtiSurfaceGPPExtn) {
         mQtiSurfaceGPPExtn->setSidebandStream(stream);
     }
+#endif
 // QTI_END: 2024-06-26: Video: gui: Introduce QTI Extensions in AOSP for Game Post Processing.
 }
 
@@ -819,9 +825,11 @@ int Surface::dequeueBuffer(sp<GraphicBuffer>* buffer, int* fenceFd) {
 
 // QTI_BEGIN: 2024-06-26: Video: gui: Introduce QTI Extensions in AOSP for Game Post Processing.
 
+#ifndef NO_BINDER
     if (mQtiSurfaceGPPExtn) {
         mQtiSurfaceGPPExtn->DynamicEnable(&mGraphicBufferProducer);
     }
+#endif
 
 // QTI_END: 2024-06-26: Video: gui: Introduce QTI Extensions in AOSP for Game Post Processing.
     IGraphicBufferProducer::DequeueBufferInput dqInput;
@@ -997,9 +1005,11 @@ int Surface::dequeueBuffers(std::vector<BatchBuffer>* buffers) {
     SURF_LOGV("Surface::dequeueBuffers");
 
 // QTI_BEGIN: 2024-06-26: Video: gui: Introduce QTI Extensions in AOSP for Game Post Processing.
+#ifndef NO_BINDER
     if (mQtiSurfaceGPPExtn) {
         mQtiSurfaceGPPExtn->DynamicEnable(&mGraphicBufferProducer);
     }
+#endif
 
 // QTI_END: 2024-06-26: Video: gui: Introduce QTI Extensions in AOSP for Game Post Processing.
     if (buffers->size() == 0) {
@@ -1449,9 +1459,11 @@ status_t Surface::queueBufferImpl(const sp<GraphicBuffer>& buffer, const sp<Fenc
         igbpInput.slot = slot;
     }
     nsecs_t now = systemTime();
+#ifndef NO_BINDER
     if (mQtiSurfaceExtn) {
         mQtiSurfaceExtn->qtiTrackTransaction(mNextFrameNumber, now);
     }
+#endif
 
     // Drop the lock temporarily while we touch the underlying producer. In the case of a local
     // BufferQueue, the following should be allowable:
@@ -1495,6 +1507,7 @@ void Surface::applyGrallocMetadataLocked(
     ATRACE_CALL();
 
 // QTI_BEGIN: 2024-04-07: Display: gui: use mapper5 for setting vendor metadata.
+#ifndef NO_BINDER
     if (mQtiSurfaceExtn) {
 // QTI_END: 2024-04-07: Display: gui: use mapper5 for setting vendor metadata.
         {
@@ -1503,6 +1516,7 @@ void Surface::applyGrallocMetadataLocked(
         }
 // QTI_BEGIN: 2024-02-29: Display: gui: set buffer dequeue duration in buffer private meta data
     }
+#endif
 
 // QTI_END: 2024-02-29: Display: gui: set buffer dequeue duration in buffer private meta data
     auto& mapper = GraphicBufferMapper::get();
@@ -1523,9 +1537,11 @@ void Surface::onBufferQueuedLocked(int slot, const sp<Fence>& fence,
         mSlots[slot].requiresFreeOnReturn = false;
     }
 
+#ifndef NO_BINDER
     if (mQtiSurfaceGPPExtn) {
         mQtiSurfaceGPPExtn->setQueuedBufferSlot(slot);
     }
+#endif
 
     if (mEnableFrameTimestamps) {
         mFrameEventHistory->applyDelta(output.frameTimestamps);
@@ -1567,7 +1583,9 @@ void Surface::onBufferQueuedLocked(int slot, const sp<Fence>& fence,
 
 // QTI_BEGIN: 2025-05-12: Performance: Add a new feature for GPU big jank detection by monitoring GPU completion in FenceMonitor
     if (CC_UNLIKELY(atrace_is_tag_enabled(ATRACE_TAG_GRAPHICS))
+#ifndef NO_BINDER
              || libguiextension::QtiFenceMonitorExtension::qtiGetGPUBigJankEnabled()
+#endif
 // QTI_END: 2025-05-12: Performance: Add a new feature for GPU big jank detection by monitoring GPU completion in FenceMonitor
              ) {
         static gui::FenceMonitor gpuCompletionThread("GPU completion");
@@ -1800,9 +1818,11 @@ int Surface::query(int what, int* value) const {
     }
 // QTI_BEGIN: 2024-08-01: Video: libgui: gpp extension latency optimization.
 
+#ifndef NO_BINDER
     if (mQtiSurfaceGPPExtn && mQtiSurfaceGPPExtn->IsGPPEnabled()) {
         return mQtiSurfaceGPPExtn->query(what, value);
     }
+#endif
 // QTI_END: 2024-08-01: Video: libgui: gpp extension latency optimization.
     return mGraphicBufferProducer->query(what, value);
 }
@@ -2446,9 +2466,11 @@ int Surface::connect(int api, const sp<SurfaceListener>& listener, bool reportBu
     mReportRemovedBuffers = reportBufferRemoval;
 // QTI_BEGIN: 2024-06-26: Video: gui: Introduce QTI Extensions in AOSP for Game Post Processing.
 
+#ifndef NO_BINDER
     if (mQtiSurfaceGPPExtn) {
         mQtiSurfaceGPPExtn->Connect(api, &mGraphicBufferProducer);
     }
+#endif
 
 // QTI_END: 2024-06-26: Video: gui: Introduce QTI Extensions in AOSP for Game Post Processing.
     if (listener != nullptr) {
@@ -2475,11 +2497,13 @@ int Surface::connect(int api, const sp<SurfaceListener>& listener, bool reportBu
         mConsumerRunningBehind = (output.numPendingBuffers >= 2);
 // QTI_BEGIN: 2024-06-26: Video: gui: Introduce QTI Extensions in AOSP for Game Post Processing.
 
+#ifndef NO_BINDER
         if (mQtiSurfaceGPPExtn) {
 // QTI_END: 2024-06-26: Video: gui: Introduce QTI Extensions in AOSP for Game Post Processing.
             mQtiSurfaceGPPExtn->StoreConnect(api, mListenerProxy, reportBufferRemoval);
 // QTI_BEGIN: 2024-06-26: Video: gui: Introduce QTI Extensions in AOSP for Game Post Processing.
         }
+#endif
 // QTI_END: 2024-06-26: Video: gui: Introduce QTI Extensions in AOSP for Game Post Processing.
 
 #if !defined(NO_BINDER)
@@ -2556,9 +2580,11 @@ int Surface::disconnect(int api, IGraphicBufferProducer::DisconnectMode mode) {
     }
 // QTI_BEGIN: 2024-06-26: Video: gui: Introduce QTI Extensions in AOSP for Game Post Processing.
 
+#ifndef NO_BINDER
     if (mQtiSurfaceGPPExtn) {
         mQtiSurfaceGPPExtn->Disconnect(api, &mGraphicBufferProducer);
     }
+#endif
 
 // QTI_END: 2024-06-26: Video: gui: Introduce QTI Extensions in AOSP for Game Post Processing.
     std::scoped_lock _dl(mDebugMutex);
@@ -2729,9 +2755,11 @@ int Surface::setBufferCount(int bufferCount)
     ATRACE_CALL();
     SURF_LOGV("Surface::setBufferCount");
     Mutex::Autolock lock(mMutex);
+#ifndef NO_BINDER
     if (mQtiSurfaceGPPExtn) {
         mQtiSurfaceGPPExtn->setBufferCount(bufferCount);
     }
+#endif
 
     status_t err = NO_ERROR;
     if (bufferCount == 0) {
@@ -3333,9 +3361,11 @@ int Surface::setAutoPrerotation(bool autoPrerotation) {
     status_t err = mGraphicBufferProducer->setAutoPrerotation(autoPrerotation);
     if (err == NO_ERROR) {
         mAutoPrerotation = autoPrerotation;
+#ifndef NO_BINDER
         if (mQtiSurfaceGPPExtn) {
             mQtiSurfaceGPPExtn->setAutoPrerotation(autoPrerotation);
         }
+#endif
     }
     SURF_LOGE_IF(err, "IGraphicBufferProducer::setAutoPrerotation(%d) returned %s", autoPrerotation,
                  strerror(-err));
@@ -3366,10 +3396,12 @@ status_t Surface::setFrameRate(float frameRate, int8_t compatibility,
                                                         changeFrameRateStrategy);
     SURF_LOGE_IF(err, "IGraphicBufferProducer::setFrameRate(%.2f) returned %s", frameRate,
                  strerror(-err));
+#ifndef NO_BINDER
     if (mQtiSurfaceGPPExtn) {
         mQtiSurfaceGPPExtn->setFrameRate(frameRate, compatibility,
                                          changeFrameRateStrategy);
     }
+#endif
     return err;
 }
 
@@ -3403,9 +3435,11 @@ status_t Surface::setAdditionalOptions(const std::vector<gui::AdditionalOptions>
 #endif
 
 status_t Surface::setPresentMode(int32_t mode) {
+#ifndef NO_BINDER
     if (mQtiSurfaceGPPExtn) {
         mQtiSurfaceGPPExtn->setPresentMode(mode);
     }
+#endif
     return mGraphicBufferProducer->setPresentMode(mode);
 }
 
