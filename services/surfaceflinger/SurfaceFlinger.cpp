@@ -1485,6 +1485,15 @@ void SurfaceFlinger::setDesiredMode(display::DisplayModeRequest desiredMode) {
 
     SFTRACE_NAME(ftl::Concat(__func__, ' ', displayId.value).c_str());
 
+// QTI_BEGIN: 2024-04-24: Display: sf: Disallow SF from setting the mode for external displays
+    if (getHwComposer().getDisplayConnectionType(displayId) ==
+        ui::DisplayConnectionType::External) {
+        ALOGW("%s: Attempted to set desired mode for external display %" PRIu64, __func__,
+              displayId.value);
+        return;
+    }
+
+// QTI_END: 2024-04-24: Display: sf: Disallow SF from setting the mode for external displays
     const bool emitEvent = desiredMode.emitEvent;
 
     if (mQtiSFExtnIntf->qtiIsFpsDeferNeeded(mode.fps.getValue())) {
@@ -1846,7 +1855,14 @@ void SurfaceFlinger::initiateDisplayModeChanges() {
             // setActiveConfig doesn't properly support seamless requirement.
             constraints.seamlessRequired = false;
         } else {
-            constraints.seamlessRequired = initialDesiredMode.seamless;
+            // QTI_BEGIN
+            // Restrict seamless mode switch for modes in the same config group
+            const auto activeMode = mDisplayModeController.getActiveMode(initialDisplayId);
+            const bool sameGroup =
+                    activeMode.modePtr->getGroup() == initialDesiredMode.mode.modePtr->getGroup();
+            // QTI_END
+            constraints.seamlessRequired =
+                    initialDesiredMode.seamless /* QTI_BEGIN */ && sameGroup; /* QTI_END */
         }
 
         hal::VsyncPeriodChangeTimeline outTimeline;
@@ -2546,6 +2562,12 @@ status_t SurfaceFlinger::removeHdrLayerInfoListener(
 }
 
 status_t SurfaceFlinger::notifyPowerBoost(int32_t boostId) {
+// QTI_BEGIN: 2024-05-15: Performance: native: smart touch consuming
+    if (boostId == DOLPHIN_TOUCH_ID) {
+        mQtiSFExtnIntf->qtiDolphinUnblockPendingBuffer();
+        return NO_ERROR;
+    }
+// QTI_END: 2024-05-15: Performance: native: smart touch consuming
     using aidl::android::hardware::power::Boost;
     Boost powerBoost = static_cast<Boost>(boostId);
 
