@@ -100,7 +100,7 @@ void QtiSurfaceExtension::qtiSetBufferDequeueDuration(std::string layerName,
             static_cast<void *>(&dequeue_duration), sizeof(dequeue_duration));
         if (error != AIMAPPER_ERROR_NONE) {
             ALOGW("setMetadata (%d) failed, buffer size %zd error:%d",
-                  static_cast<int64_t>(SNAP_TYPE_BUFFER_DEQUEUE_DURATION),
+                  static_cast<int>(SNAP_TYPE_BUFFER_DEQUEUE_DURATION),
                   sizeof(dequeue_duration), error);
         }
     } else if (mMapper4) {

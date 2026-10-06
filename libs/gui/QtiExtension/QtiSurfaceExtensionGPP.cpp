@@ -28,10 +28,11 @@ QtiSurfaceExtensionGPP::QtiSurfaceExtensionGPP(
         Surface* surface,
         const sp<IBinder> handle,
         sp<IGraphicBufferProducer>* gbp)
-    : mSurface(surface),
-      mIsEnable(false),
+    : mIsEnable(false),
+      mSurface(surface),
       mIsSupported(true),
       mConnectedToGpu(false),
+      mClientSetBufferCount(0),
       mSessionConflictRetryCount(0),
       mLastSessionConflictRetryTimestamp(0),
       mOriginalGbp(*gbp),
@@ -41,7 +42,6 @@ QtiSurfaceExtensionGPP::QtiSurfaceExtensionGPP(
       mFuncInit(nullptr),
       mFuncDeinit(nullptr),
       mConnectedProducerListener(),
-      mClientSetBufferCount(0),
       mLastQueuedBufferSlot(-1),
       mAutoPrerotation(false),
       mPresentMode(0) {
