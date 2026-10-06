@@ -29,8 +29,6 @@
 #undef LOG_TAG
 #define LOG_TAG "BLASTBufferQueue"
 
-#include "QtiExtension/QtiBLASTBufferQueueExtension.h"
-
 #define ATRACE_TAG ATRACE_TAG_GRAPHICS
 //#define LOG_NDEBUG 0
 
@@ -63,6 +61,7 @@
 #include <com_android_graphics_libgui_flags.h>
 
 #include "AsyncWorker.h"
+#include "QtiExtension/QtiBLASTBufferQueueExtension.h"
 
 using namespace com::android::graphics::libgui;
 using namespace std::chrono_literals;
