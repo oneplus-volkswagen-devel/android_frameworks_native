@@ -3,7 +3,9 @@
  */
 #pragma once
 
+#ifndef ATRACE_TAG
 #define ATRACE_TAG ATRACE_TAG_GRAPHICS
+#endif
 
 #include <utils/Log.h>
 #include <utils/Trace.h>
