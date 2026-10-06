@@ -29,6 +29,8 @@
 
 #include <com_android_graphics_surfaceflinger_flags.h>
 
+#include "QtiExtension/QtiDolphinWrapper.h"
+
 namespace android {
 using namespace com::android::graphics::surfaceflinger;
 
@@ -138,6 +140,10 @@ int DisplayEventDispatcher::handleEvent(int, int events, void*) {
         mWaitingForVsync = false;
         mLastVsyncCount = vsyncCount;
         dispatchVsync(vsyncTimestamp, vsyncDisplayId, vsyncCount, vsyncEventData);
+        QtiDolphinWrapper* qtiDolphinWrapper = QtiDolphinWrapper::qtiGetDolphinWrapper();
+        if (qtiDolphinWrapper && qtiDolphinWrapper->qtiDolphinSetVsyncTime) {
+            qtiDolphinWrapper->qtiDolphinSetVsyncTime(vsyncTimestamp);
+        }
     }
 
     if (mWaitingForVsync) {

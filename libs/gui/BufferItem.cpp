@@ -90,6 +90,7 @@ size_t BufferItem::getPodSize() const {
     addAligned(size, mQueuedBuffer);
     addAligned(size, mIsStale);
     addAligned(size, mApi);
+    addAligned(size, mCountOfDroppedBuffers);
     return size;
 }
 
@@ -194,6 +195,7 @@ status_t BufferItem::flatten(
     writeAligned(buffer, size, mQueuedBuffer);
     writeAligned(buffer, size, mIsStale);
     writeAligned(buffer, size, mApi);
+    writeAligned(buffer, size, mCountOfDroppedBuffers);
 
     return NO_ERROR;
 }
@@ -276,6 +278,7 @@ status_t BufferItem::unflatten(
     readAligned(buffer, size, mQueuedBuffer);
     readAligned(buffer, size, mIsStale);
     readAligned(buffer, size, mApi);
+    readAligned(buffer, size, mCountOfDroppedBuffers);
 
     return NO_ERROR;
 }

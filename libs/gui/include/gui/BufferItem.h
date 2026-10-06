@@ -137,6 +137,10 @@ class BufferItem : public Flattenable<BufferItem> {
 
     // Indicates the API (NATIVE_WINDOW_API_xxx) that queues the buffer.
     int mApi;
+
+    // mCountOfDroppedBuffers is the number of frames dropped internally by the
+    // BufferQueue before this frame was acquired.
+    uint32_t mCountOfDroppedBuffers{0};
 };
 
 } // namespace android

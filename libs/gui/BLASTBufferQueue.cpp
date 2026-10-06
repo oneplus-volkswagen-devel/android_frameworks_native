@@ -14,8 +14,22 @@
  * limitations under the License.
  */
 
+// QTI_BEGIN: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+/* Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+// QTI_END: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+// QTI_BEGIN: 2024-04-07: Display: gui: handle destruction of QtiBLASTBufferQueueExtension
+ * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+// QTI_END: 2024-04-07: Display: gui: handle destruction of QtiBLASTBufferQueueExtension
+// QTI_BEGIN: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
+ */
+
+// QTI_END: 2023-03-06: Display: SF: Squash commit of SF Extensions.
 #undef LOG_TAG
 #define LOG_TAG "BLASTBufferQueue"
+
+#include "QtiExtension/QtiBLASTBufferQueueExtension.h"
 
 #define ATRACE_TAG ATRACE_TAG_GRAPHICS
 //#define LOG_NDEBUG 0
@@ -223,6 +237,13 @@ void BLASTBufferQueue::initialize() {
     mProducer->setMaxDequeuedBufferCount(2);
 
     BQA_LOGV("BLASTBufferQueue created");
+// QTI_BEGIN: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+    if (!mQtiBBQExtn) {
+// QTI_END: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+        mQtiBBQExtn = new libguiextension::QtiBLASTBufferQueueExtension(this, mName);
+// QTI_BEGIN: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+    }
+// QTI_END: 2023-03-06: Display: SF: Squash commit of SF Extensions.
 }
 
 BLASTBufferQueue::BLASTBufferQueue(const std::string& name, bool updateDestinationFrame)
@@ -239,6 +260,11 @@ BLASTBufferQueue::BLASTBufferQueue(const std::string& name, bool updateDestinati
 }
 
 BLASTBufferQueue::~BLASTBufferQueue() {
+// QTI_BEGIN: 2024-04-07: Display: gui: handle destruction of QtiBLASTBufferQueueExtension
+    if (mQtiBBQExtn) {
+      delete mQtiBBQExtn;
+    }
+// QTI_END: 2024-04-07: Display: gui: handle destruction of QtiBLASTBufferQueueExtension
     TransactionCompletedListener::getInstance()->removeQueueStallListener(this);
 
     std::function<void(SurfaceComposerClient::Transaction*)> callback;
@@ -325,6 +351,11 @@ void BLASTBufferQueue::update(const sp<SurfaceControl>& surface, uint32_t width,
         // All transactions on our apply token are one-way. See comment on mAppliedLastTransaction
         t.setApplyToken(mApplyToken).apply(false /* synchronous */, true /* oneWay */);
     }
+// QTI_BEGIN: 2023-03-06: Display: SF: Squash commit of SF Extensions.
+    if (mQtiBBQExtn) {
+        mQtiBBQExtn->qtiSetConsumerUsageBitsForRC(mName, mSurfaceControl);
+    }
+// QTI_END: 2023-03-06: Display: SF: Squash commit of SF Extensions.
 }
 
 static std::optional<SurfaceControlStats> findMatchingStat(
@@ -544,6 +575,9 @@ void BLASTBufferQueue::releaseBuffer(const ReleaseCallbackId& callbackId,
         return;
     }
     mNumAcquired--;
+// QTI_BEGIN: 2023-04-24: Performance: gui: Fix for thread safety
+    mQtiNumUndequeued++;
+// QTI_END: 2023-04-24: Performance: gui: Fix for thread safety
     BBQ_TRACE("frame=%" PRIu64, callbackId.framenumber);
     BQA_LOGV("released %s", callbackId.to_string().c_str());
     mBufferItemConsumer->releaseBuffer(it->second, releaseFence);
@@ -607,13 +641,31 @@ status_t BLASTBufferQueue::acquireNextBufferLocked(
     }
 
     auto buffer = bufferItem.mGraphicBuffer;
-    mNumFrameAvailable--;
+
+    int32_t totalProcessed = 1 + static_cast<int32_t>(bufferItem.mCountOfDroppedBuffers);
+    if (mNumFrameAvailable >= totalProcessed) {
+        mNumFrameAvailable -= totalProcessed;
+    } else {
+        BQA_LOGE("mNumFrameAvailable (%u) is smaller than processed frames (%u)",
+                 mNumFrameAvailable, totalProcessed);
+        mNumFrameAvailable = 0;
+    }
+
     BBQ_TRACE("frame=%" PRIu64, bufferItem.mFrameNumber);
 
     if (buffer == nullptr) {
         mBufferItemConsumer->releaseBuffer(bufferItem, Fence::NO_FENCE);
         BQA_LOGE("Buffer was empty");
         return BAD_VALUE;
+    }
+
+    if (buffer->getId() == mLastAcquiredBufferId &&
+        bufferItem.mFrameNumber == mLastAcquiredFrameNumber) {
+        BQA_LOGV("acquireNextBufferLocked skipping already acquired bufferId:%" PRIu64
+                 " frameNumber:%" PRIu64,
+                 buffer->getId(), bufferItem.mFrameNumber);
+        mBufferItemConsumer->releaseBuffer(bufferItem, Fence::NO_FENCE);
+        return acquireNextBufferLocked(transaction);
     }
 
     if (rejectBuffer(bufferItem)) {
@@ -626,8 +678,9 @@ status_t BLASTBufferQueue::acquireNextBufferLocked(
     }
 
     mNumAcquired++;
+    mLastAcquiredBufferId = buffer->getId();
     mLastAcquiredFrameNumber = bufferItem.mFrameNumber;
-    ReleaseCallbackId releaseCallbackId(buffer->getId(), mLastAcquiredFrameNumber);
+    ReleaseCallbackId releaseCallbackId(mLastAcquiredBufferId, mLastAcquiredFrameNumber);
     mSubmitted.emplace_or_replace(releaseCallbackId, bufferItem);
 
     bool needsDisconnect = false;
@@ -762,18 +815,47 @@ Rect BLASTBufferQueue::computeCrop(const BufferItem& item) {
     return item.mCrop;
 }
 
-void BLASTBufferQueue::acquireAndReleaseBuffer() {
+status_t BLASTBufferQueue::acquireAndReleaseBuffer() {
     BBQ_TRACE();
     BufferItem bufferItem;
     status_t status =
             mBufferItemConsumer->acquireBuffer(&bufferItem, 0 /* expectedPresent */, false);
     if (status != OK) {
-        BQA_LOGE("Failed to acquire a buffer in acquireAndReleaseBuffer, err=%s",
-                 statusToString(status).c_str());
-        return;
+        if (status != BufferQueue::NO_BUFFER_AVAILABLE) {
+            BQA_LOGE("Failed to acquire a buffer in acquireAndReleaseBuffer, err=%s",
+                     statusToString(status).c_str());
+        }
+        return status;
     }
-    mNumFrameAvailable--;
+
+    int32_t totalProcessed = 1 + static_cast<int32_t>(bufferItem.mCountOfDroppedBuffers);
+    if (mNumFrameAvailable >= totalProcessed) {
+        mNumFrameAvailable -= totalProcessed;
+    } else {
+        BQA_LOGE("mNumFrameAvailable (%u) is smaller than processed frames (%u)",
+                 mNumFrameAvailable, totalProcessed);
+        mNumFrameAvailable = 0;
+    }
+
     mBufferItemConsumer->releaseBuffer(bufferItem, bufferItem.mFence);
+    return OK;
+}
+
+void BLASTBufferQueue::onDisconnect() {
+    UNIQUE_LOCK_WITH_ASSERTION(mMutex);
+    BQA_LOGV("onDisconnect: clearing state");
+
+    // Flush the shadow queue to safely drain any stale buffers left in the
+    // BufferQueueCore queue by the disconnected producer.
+    while (mNumFrameAvailable > 0) {
+        if (acquireAndReleaseBuffer() != OK) {
+            BQA_LOGV("Stopped flushing shadow queue (consumer likely full). %u remaining.",
+                     mNumFrameAvailable);
+            break;
+        }
+    }
+
+    mCallbackCV.notify_all();
 }
 
 void BLASTBufferQueue::onFrameAvailable(const BufferItem& item) {
@@ -811,7 +893,7 @@ void BLASTBufferQueue::onFrameAvailable(const BufferItem& item) {
                 // a release callback invoked.
                 while (mNumFrameAvailable > 0) {
                     // flush out the shadow queue
-                    acquireAndReleaseBuffer();
+                    if (acquireAndReleaseBuffer() != OK) break;
                 }
             } else {
                 // Make sure the frame available count is 0 before proceeding with a sync to ensure
@@ -877,6 +959,9 @@ void BLASTBufferQueue::onFrameReplaced(const BufferItem& item) {
 void BLASTBufferQueue::onFrameDequeued(const uint64_t bufferId) {
     std::lock_guard _lock{mTimestampMutex};
     mDequeueTimestamps.emplace_or_replace(bufferId, systemTime());
+// QTI_BEGIN: 2023-04-24: Performance: gui: Fix for thread safety
+    mQtiNumUndequeued--;
+// QTI_END: 2023-04-24: Performance: gui: Fix for thread safety
 };
 
 void BLASTBufferQueue::onFrameCancelled(const uint64_t bufferId) {
